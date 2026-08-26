@@ -72,7 +72,11 @@ function translateAuthError(message: string): string {
   if (normalized.includes("too many requests") || normalized.includes("rate limit")) {
     return "Demasiados intentos. Espera unos minutos antes de volver a intentarlo.";
   }
-  if (normalized.includes("network") || normalized.includes("fetch failed")) {
+  if (
+    normalized.includes("network") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("failed to fetch")
+  ) {
     return "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.";
   }
 
