@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: #060710;
+  --surface: #0d0e1a;
+  --surface-2: #12142380;
+  --border-subtle: #ffffff14;
+  --foreground: #e8e9f3;
+  --muted-foreground: #9395a8;
+  --accent: #6d6df6;
+  --accent-2: #9c5cf0;
+  --positive: #34d399;
+  --negative: #f87171;
+  --warning: #fbbf24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Scrollbar discreto, coherente con el tema oscuro. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2d40 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #2a2d40;
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gradient-accent {
+  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.text-gradient-accent {
+  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.06),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
