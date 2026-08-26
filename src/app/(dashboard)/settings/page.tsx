@@ -15,7 +15,7 @@ const INTEGRATIONS = [
   {
     name: "Supabase",
     description: "Autenticación y persistencia de datos.",
-    envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"],
+    envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
     configured: isSupabaseConfigured(),
   },
   {

@@ -2,13 +2,17 @@
 
 Panel interno (privado, de un solo cliente de agencia) para visualizar métricas de campañas de **Meta Ads** y, en fases posteriores, analizarlas con **IA (Claude, de Anthropic)**.
 
-Este MVP funciona **100% con datos mock realistas**: no requiere ninguna credencial real para instalarse, ejecutarse y evaluarse. Meta Marketing API, Supabase y Anthropic están **preparados arquitectónicamente** pero **no conectados todavía**.
+Los datos de campañas siguen siendo **100% mock**. La autenticación (**Supabase Auth**) ya está
+conectada: con credenciales reales en `.env.local` el login usa sesiones reales; sin ellas, cae
+automáticamente en modo demo. Meta Marketing API y Anthropic siguen **preparados
+arquitectónicamente** pero **no conectados todavía**.
 
 ---
 
 ## 1. Qué hace el proyecto
 
-- Login preparado para Supabase Auth (con modo demo si no hay credenciales).
+- Login con Supabase Auth real (email/contraseña) — modo demo automático si no hay credenciales
+  configuradas.
 - Selector de cliente (Orthobasic / Hotel Expert) y filtro de rango de fechas.
 - Dashboard de Overview con 10 KPIs (inversión, alcance, impresiones, CPM, clics, CTR, CPC,
   resultados, costo por resultado, frecuencia), cada uno con variación % contra el periodo
@@ -102,16 +106,18 @@ vacío o sin crear, la app funciona íntegramente en modo mock/demo.
 | Variable | Uso | Dónde se lee |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | `lib/supabase/config.ts` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave pública de Supabase | `lib/supabase/config.ts` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clave de servidor con acceso total (bypassa RLS) | `lib/supabase/server.ts` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave pública de Supabase (nomenclatura actual, sustituye a la antigua "anon key") | `lib/supabase/config.ts` |
 | `META_APP_ID` / `META_APP_SECRET` | Credenciales de la app de Meta | `lib/meta/config.ts` |
 | `META_ACCESS_TOKEN` | Token de acceso a la Graph API | `lib/meta/config.ts` |
 | `META_AD_ACCOUNT_ID` | Cuenta publicitaria a consultar | `lib/meta/config.ts` |
 | `ANTHROPIC_API_KEY` | Clave de la API de Claude | `lib/ai/claude-service.ts` (vía `/api/ai/analyze`) |
 
-**Nunca** se exponen `META_APP_SECRET`, `META_ACCESS_TOKEN`, `ANTHROPIC_API_KEY` ni
-`SUPABASE_SERVICE_ROLE_KEY` al cliente: ninguna tiene el prefijo `NEXT_PUBLIC_` y solo se leen
-desde código de servidor (API routes, Server Components, Server Actions).
+**Nunca** se exponen `META_APP_SECRET`, `META_ACCESS_TOKEN` ni `ANTHROPIC_API_KEY` al cliente:
+ninguna tiene el prefijo `NEXT_PUBLIC_` y solo se leen desde código de servidor (API routes,
+Server Components, Server Actions, middleware). La clave secreta de Supabase (antes
+`SUPABASE_SERVICE_ROLE_KEY`, hoy "Secret key") no se usa en esta fase — el cliente de servidor
+(`lib/supabase/server.ts`) opera con la misma clave pública que el navegador y respeta Row Level
+Security.
 
 ## 6. Estructura de carpetas
 
@@ -164,20 +170,43 @@ El frontend **nunca** llama a Anthropic directamente: siempre pasa por el endpoi
 `POST /api/ai/analyze` (`app/api/ai/analyze/route.ts`), que es el único lugar donde
 `ANTHROPIC_API_KEY` podría usarse.
 
-## 10. Dónde conectaremos Supabase
+## 10. Supabase (activo)
 
-1. Crear un proyecto en [supabase.com](https://supabase.com) y copiar `NEXT_PUBLIC_SUPABASE_URL`
-   / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (y `SUPABASE_SERVICE_ROLE_KEY` si hace falta) a
-   `.env.local`.
-2. Ejecutar las tablas de referencia en `lib/supabase/schema.sql` (documentación no destructiva;
-   conviértelas en migraciones reales con la Supabase CLI cuando toque).
-3. `lib/supabase/client.ts` (browser) y `lib/supabase/server.ts` (Server Components/Actions/Route
-   Handlers) ya usan `@supabase/ssr` y devuelven `null` automáticamente si las variables no están
-   configuradas — no hace falta ningún cambio de código para "activarlas", solo definir las
-   variables de entorno.
-4. El login (`app/(auth)/login/page.tsx`) y el guard del dashboard
-   (`components/layout/dashboard-shell.tsx` vía `hooks/use-auth-state.ts`) ya manejan ambos
-   casos (demo y Supabase real) de forma transparente.
+Supabase Auth ya está conectado — esta sección documenta cómo, no solo "dónde":
+
+1. Crea un proyecto en [supabase.com](https://supabase.com) y copia, desde
+   **Project Settings → API Keys**, la URL del proyecto y la **Publishable key** (nomenclatura
+   actual de Supabase) a `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   ```
+2. Crea al menos un usuario en **Authentication → Users** (o habilita el registro) con email y
+   contraseña — el login del MVP usa `signInWithPassword`, no hay pantalla de registro todavía.
+3. Reinicia `npm run dev`. En cuanto ambas variables existen, `isSupabaseConfigured()` pasa a
+   `true` en todo el proyecto y el modo demo se desactiva automáticamente — no hace falta tocar
+   código.
+4. `lib/supabase/client.ts` (browser) y `lib/supabase/server.ts` (Server Components/Actions/Route
+   Handlers) usan `@supabase/ssr` con la clave pública; ambos devuelven `null` si las variables no
+   están configuradas, para que el resto del código caiga automáticamente en modo demo.
+5. `src/proxy.ts` (la convención "Proxy" de Next.js 16, antes llamada Middleware) protege las
+   rutas del dashboard a nivel de servidor: verifica la sesión con
+   `supabase.auth.getUser()` en cada request y redirige a `/login` antes de renderizar si no hay
+   usuario. En modo demo esta comprobación se salta (no hay sesión de Supabase que verificar) y la
+   protección la sigue haciendo el guard de cliente (`hooks/use-auth-state.ts`, basado en
+   `localStorage`), exactamente igual que antes.
+6. El login (`app/(auth)/login/page.tsx` vía `lib/supabase/auth.ts`) traduce los errores de
+   Supabase Auth a mensajes claros en español (credenciales incorrectas, email sin confirmar,
+   demasiados intentos, error de red...).
+7. Cerrar sesión: menú de usuario en la topbar → "Cerrar sesión" (`components/layout/topbar.tsx`),
+   llama a `signOut()` en `lib/supabase/auth.ts`.
+8. No se han creado tablas todavía: `lib/supabase/schema.sql` sigue siendo solo documentación de
+   referencia (no ejecutada) para cuando el proyecto necesite persistencia propia más allá de
+   Auth.
+
+La clave secreta de Supabase (antes `service_role`) **no se usa en esta fase** — se añadirá más
+adelante, en un cliente de servidor aparte, solo si una funcionalidad concreta necesita saltarse
+Row Level Security.
 
 ## 11. Despliegue en Vercel (fase posterior)
 

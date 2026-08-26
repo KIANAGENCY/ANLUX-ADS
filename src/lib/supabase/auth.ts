@@ -46,9 +46,37 @@ export async function signInWithPassword(email: string, password: string): Promi
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: translateAuthError(error.message) };
   }
   return { success: true };
+}
+
+/**
+ * Supabase Auth devuelve sus mensajes de error en inglés. Traducimos los
+ * casos más comunes para que el login siempre muestre un error claro en
+ * español; el resto cae en un mensaje genérico (nunca se expone el mensaje
+ * crudo del proveedor).
+ */
+function translateAuthError(message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("invalid login credentials")) {
+    return "Email o contraseña incorrectos.";
+  }
+  if (normalized.includes("email not confirmed")) {
+    return "Debes confirmar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.";
+  }
+  if (normalized.includes("user not found")) {
+    return "No existe ninguna cuenta con ese email.";
+  }
+  if (normalized.includes("too many requests") || normalized.includes("rate limit")) {
+    return "Demasiados intentos. Espera unos minutos antes de volver a intentarlo.";
+  }
+  if (normalized.includes("network") || normalized.includes("fetch failed")) {
+    return "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.";
+  }
+
+  return "No se pudo iniciar sesión. Verifica tus credenciales e inténtalo de nuevo.";
 }
 
 export async function signOut(): Promise<void> {
