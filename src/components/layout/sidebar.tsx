@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useFilters } from "@/components/providers/filters-provider";
 import { cn } from "@/lib/utils/cn";
 
 export const NAV_ITEMS = [
@@ -28,6 +29,7 @@ export const NAV_ITEMS = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { isRealAccount } = useFilters();
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/8 bg-[#08091200]">
@@ -63,11 +65,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="border-t border-white/8 px-4 py-4">
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          MVP en modo demo · datos simulados
-        </p>
-      </div>
+      {!isRealAccount && (
+        <div className="border-t border-white/8 px-4 py-4">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            MVP en modo demo · datos simulados
+          </p>
+        </div>
+      )}
     </aside>
   );
 }

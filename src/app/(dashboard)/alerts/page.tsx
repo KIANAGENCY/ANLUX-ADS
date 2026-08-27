@@ -3,12 +3,13 @@
 import { ShieldCheck } from "lucide-react";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlerts } from "@/hooks/use-alerts";
 
 export default function AlertsPage() {
-  const { loading, alerts } = useAlerts();
+  const { loading, alerts, error } = useAlerts();
   const counts = {
     critical: alerts.filter((a) => a.severity === "critical").length,
     warning: alerts.filter((a) => a.severity === "warning").length,
@@ -22,6 +23,8 @@ export default function AlertsPage() {
         <SummaryPill label="Advertencias" value={counts.warning} color="text-warning" />
         <SummaryPill label="Info" value={counts.info} color="text-[#b3b3ff]" />
       </div>
+
+      {error && <ErrorBanner message={error} />}
 
       {loading ? (
         <div className="space-y-3">

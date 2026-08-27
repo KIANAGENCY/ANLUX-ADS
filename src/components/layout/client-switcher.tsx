@@ -45,6 +45,14 @@ export function ClientSwitcher() {
             <span className="font-medium text-foreground">{current.name}</span>
             <span className="text-[11px] text-muted-foreground">{current.subtitle}</span>
           </span>
+          <span
+            className={
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide " +
+              (isRealAccount ? "bg-[#1877F2]/15 text-[#5b9bf7]" : "bg-white/8 text-muted-foreground")
+            }
+          >
+            {isRealAccount ? "REAL" : "DEMO"}
+          </span>
           <DropdownChevron />
         </span>
       }
