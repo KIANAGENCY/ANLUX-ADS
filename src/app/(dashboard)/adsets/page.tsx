@@ -5,11 +5,12 @@ import { Card } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusFilter } from "@/components/ui/status-filter";
 import { AdSetsTable } from "@/components/adsets/adsets-table";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { useAdSets } from "@/hooks/use-adsets";
 import type { EntityStatus } from "@/lib/types";
 
 export default function AdSetsPage() {
-  const { loading, adSets } = useAdSets();
+  const { loading, adSets, error } = useAdSets();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<EntityStatus | "all">("all");
 
@@ -37,6 +38,8 @@ export default function AdSetsPage() {
           <StatusFilter value={status} onChange={setStatus} options={["ACTIVE", "PAUSED", "IN_REVIEW", "ARCHIVED"]} />
         </div>
       </div>
+
+      {error && <ErrorBanner message={error} />}
 
       <Card>
         <AdSetsTable adSets={filtered} loading={loading} />

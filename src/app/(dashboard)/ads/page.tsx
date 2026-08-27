@@ -7,11 +7,12 @@ import { StatusFilter } from "@/components/ui/status-filter";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { AdCard } from "@/components/ads/ad-card";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { useAds } from "@/hooks/use-ads";
 import type { EntityStatus } from "@/lib/types";
 
 export default function AdsPage() {
-  const { loading, ads } = useAds();
+  const { loading, ads, error } = useAds();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<EntityStatus | "all">("all");
 
@@ -39,6 +40,8 @@ export default function AdsPage() {
           <StatusFilter value={status} onChange={setStatus} options={["ACTIVE", "PAUSED", "IN_REVIEW", "ARCHIVED"]} />
         </div>
       </div>
+
+      {error && <ErrorBanner message={error} />}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

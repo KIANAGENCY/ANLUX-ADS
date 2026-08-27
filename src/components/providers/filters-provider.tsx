@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { DateRangePreset } from "@/lib/types";
+import type { DateRangePreset, MetaAdAccountSummary } from "@/lib/types";
 import { getPreviousPeriod, resolveDateRange } from "@/lib/utils/dates";
 import { MOCK_CLIENTS } from "@/lib/mock/entities";
 
@@ -12,6 +12,11 @@ interface FiltersContextValue {
   setDateRangePreset: (preset: DateRangePreset) => void;
   dateRange: { from: string; to: string };
   previousDateRange: { from: string; to: string };
+  /** `true` cuando `clientId` es una cuenta publicitaria real de Meta (prefijo "act_"), no un cliente mock/demo. */
+  isRealAccount: boolean;
+  /** Cuentas reales descubiertas vía /api/meta/accounts. Vacío si Meta no está configurado o aún no se resolvió. */
+  realAccounts: MetaAdAccountSummary[];
+  realAccountsLoading: boolean;
 }
 
 const FiltersContext = createContext<FiltersContextValue | null>(null);
@@ -21,6 +26,10 @@ const STORAGE_KEY = "anlux_filters";
 interface StoredFilters {
   clientId?: string;
   dateRangePreset?: DateRangePreset;
+}
+
+function isKnownClientId(id: string): boolean {
+  return id.startsWith("act_") || MOCK_CLIENTS.some((c) => c.id === id);
 }
 
 /** Solo se llama en el lazy initializer de useState: nunca durante SSR. */
@@ -37,11 +46,13 @@ function readStoredFilters(): StoredFilters {
 export function FiltersProvider({ children }: { children: ReactNode }) {
   const [clientId, setClientId] = useState<string>(() => {
     const stored = readStoredFilters().clientId;
-    return stored && MOCK_CLIENTS.some((c) => c.id === stored) ? stored : MOCK_CLIENTS[0].id;
+    return stored && isKnownClientId(stored) ? stored : MOCK_CLIENTS[0].id;
   });
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>(
     () => readStoredFilters().dateRangePreset ?? "last30"
   );
+  const [realAccounts, setRealAccounts] = useState<MetaAdAccountSummary[]>([]);
+  const [realAccountsLoading, setRealAccountsLoading] = useState(true);
 
   useEffect(() => {
     try {
@@ -50,6 +61,27 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
       // Ignorar: la persistencia de filtros es una comodidad, no un requisito.
     }
   }, [clientId, dateRangePreset]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/meta/accounts")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("not configured"))))
+      .then((data: { accounts?: MetaAdAccountSummary[] }) => {
+        if (!cancelled) setRealAccounts(data.accounts ?? []);
+      })
+      .catch(() => {
+        // Meta no configurado, sin permisos, o error de red: el modo demo sigue disponible igual.
+        if (!cancelled) setRealAccounts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRealAccountsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const value = useMemo<FiltersContextValue>(() => {
     const dateRange = resolveDateRange(dateRangePreset);
@@ -60,8 +92,11 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
       setDateRangePreset,
       dateRange,
       previousDateRange: getPreviousPeriod(dateRange),
+      isRealAccount: clientId.startsWith("act_"),
+      realAccounts,
+      realAccountsLoading,
     };
-  }, [clientId, dateRangePreset]);
+  }, [clientId, dateRangePreset, realAccounts, realAccountsLoading]);
 
   return <FiltersContext.Provider value={value}>{children}</FiltersContext.Provider>;
 }

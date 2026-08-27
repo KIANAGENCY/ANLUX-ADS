@@ -42,8 +42,9 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
               <StatusBadge status={campaign.status} />
             </div>
             <p className="text-sm text-muted-foreground">
-              {OBJECTIVE_LABELS[campaign.objective]} · Presupuesto {formatCurrency(campaign.dailyBudget)}/día · Iniciada
-              el {formatDateLong(campaign.startDate)}
+              {OBJECTIVE_LABELS[campaign.objective]}
+              {campaign.dailyBudget !== null && <> · Presupuesto {formatCurrency(campaign.dailyBudget)}/día</>}
+              {campaign.startDate && <> · Iniciada el {formatDateLong(campaign.startDate)}</>}
             </p>
           </div>
 

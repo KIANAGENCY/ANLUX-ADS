@@ -5,11 +5,14 @@ import { Card } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusFilter } from "@/components/ui/status-filter";
 import { CampaignsTable } from "@/components/campaigns/campaigns-table";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { useCampaigns } from "@/hooks/use-campaigns";
+import { useFilters } from "@/components/providers/filters-provider";
 import type { EntityStatus } from "@/lib/types";
 
 export default function CampaignsPage() {
-  const { loading, campaigns } = useCampaigns();
+  const { loading, campaigns, error } = useCampaigns();
+  const { isRealAccount } = useFilters();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<EntityStatus | "all">("all");
 
@@ -38,8 +41,10 @@ export default function CampaignsPage() {
         </div>
       </div>
 
+      {error && <ErrorBanner message={error} />}
+
       <Card>
-        <CampaignsTable campaigns={filtered} loading={loading} />
+        <CampaignsTable campaigns={filtered} loading={loading} disableRowClick={isRealAccount} />
       </Card>
     </div>
   );

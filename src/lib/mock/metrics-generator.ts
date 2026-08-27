@@ -193,7 +193,9 @@ function getGenerationStart(): string {
  * números siempre, sin importar cuántas veces ni en qué orden se invoque.
  */
 function generateAdDay(ad: Ad, adSet: AdSet, campaign: Campaign, date: string): DailyMetrics | null {
-  if (date < ad.startDate) return null;
+  // Los datos mock siempre definen startDate/dailyBudget (ver lib/mock/entities.ts);
+  // solo los datos reales de Meta pueden dejarlos en null/undefined.
+  if (date < ad.startDate!) return null;
   if (campaign.status === "IN_REVIEW") return null;
 
   const today = getToday();
@@ -220,7 +222,7 @@ function generateAdDay(ad: Ad, adSet: AdSet, campaign: Campaign, date: string): 
 
   const seasonality = weekdaySeasonality(date, campaign.objective);
   const pacing = randomBetween(rng, 0.82, 1.12);
-  const spend = Math.max(0, adSet.dailyBudget * profile.spendShare * seasonality * pacing);
+  const spend = Math.max(0, adSet.dailyBudget! * profile.spendShare * seasonality * pacing);
 
   const cpm = Math.max(3, applyCostTrend(profile.baseCpm, profile.costTrend, progress, recentWindow) * randomBetween(rng, 0.92, 1.08));
   const impressions = Math.round((spend / cpm) * 1000);

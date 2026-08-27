@@ -45,8 +45,8 @@ export function AdSetsTable({
       key: "dailyBudget",
       label: "Presupuesto/día",
       align: "right",
-      sortValue: (a) => a.dailyBudget,
-      render: (a) => formatCurrency(a.dailyBudget),
+      sortValue: (a) => a.dailyBudget ?? -1,
+      render: (a) => (a.dailyBudget !== null ? formatCurrency(a.dailyBudget) : "—"),
     },
     {
       key: "audience",

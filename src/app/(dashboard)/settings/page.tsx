@@ -8,8 +8,8 @@ import { isAnthropicConfigured } from "@/lib/ai/claude-service";
 const INTEGRATIONS = [
   {
     name: "Meta Marketing API",
-    description: "Origen de campañas, ad sets, anuncios y métricas.",
-    envVars: ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"],
+    description: "Origen de campañas, ad sets, anuncios y métricas (lectura, vía app/api/meta/*).",
+    envVars: ["META_ACCESS_TOKEN"],
     configured: isMetaApiConfigured(),
   },
   {

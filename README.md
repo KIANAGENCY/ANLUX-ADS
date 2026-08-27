@@ -2,10 +2,10 @@
 
 Panel interno (privado, de un solo cliente de agencia) para visualizar métricas de campañas de **Meta Ads** y, en fases posteriores, analizarlas con **IA (Claude, de Anthropic)**.
 
-Los datos de campañas siguen siendo **100% mock**. La autenticación (**Supabase Auth**) ya está
-conectada: con credenciales reales en `.env.local` el login usa sesiones reales; sin ellas, cae
-automáticamente en modo demo. Meta Marketing API y Anthropic siguen **preparados
-arquitectónicamente** pero **no conectados todavía**.
+La autenticación (**Supabase Auth**) y la lectura de **Meta Marketing API** ya están conectadas:
+con credenciales reales en `.env.local` ambas usan datos reales; sin ellas, cada una cae
+automáticamente en modo demo/mock por separado. **Anthropic (Claude)** sigue **preparado
+arquitectónicamente** pero **no conectado todavía**.
 
 ---
 
@@ -13,7 +13,9 @@ arquitectónicamente** pero **no conectados todavía**.
 
 - Login con Supabase Auth real (email/contraseña) — modo demo automático si no hay credenciales
   configuradas.
-- Selector de cliente (Orthobasic / Hotel Expert) y filtro de rango de fechas.
+- Selector de cliente con dos modos: clientes demo (Orthobasic / Hotel Expert, datos mock) y
+  cuentas publicitarias reales de Meta (descubiertas automáticamente con `META_ACCESS_TOKEN`,
+  ver sección 8) — y filtro de rango de fechas, aplicable a ambos modos.
 - Dashboard de Overview con 10 KPIs (inversión, alcance, impresiones, CPM, clics, CTR, CPC,
   resultados, costo por resultado, frecuencia), cada uno con variación % contra el periodo
   anterior y una indicación correcta de si esa variación es buena o mala (p. ej. un CPC al alza
@@ -107,17 +109,18 @@ vacío o sin crear, la app funciona íntegramente en modo mock/demo.
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase | `lib/supabase/config.ts` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave pública de Supabase (nomenclatura actual, sustituye a la antigua "anon key") | `lib/supabase/config.ts` |
-| `META_APP_ID` / `META_APP_SECRET` | Credenciales de la app de Meta | `lib/meta/config.ts` |
-| `META_ACCESS_TOKEN` | Token de acceso a la Graph API | `lib/meta/config.ts` |
-| `META_AD_ACCOUNT_ID` | Cuenta publicitaria a consultar | `lib/meta/config.ts` |
+| `META_ACCESS_TOKEN` | Token de acceso a Meta Graph API (único requisito para datos reales) | `lib/meta/config.ts`, vía `lib/meta/real/` |
+| `META_GRAPH_API_VERSION` | Opcional: fija la versión de Graph API | `lib/meta/config.ts` |
+| `META_APP_ID` / `META_APP_SECRET` / `META_AD_ACCOUNT_ID` | Reservadas para una fase futura (no se usan todavía) | `lib/meta/config.ts` |
 | `ANTHROPIC_API_KEY` | Clave de la API de Claude | `lib/ai/claude-service.ts` (vía `/api/ai/analyze`) |
 
 **Nunca** se exponen `META_APP_SECRET`, `META_ACCESS_TOKEN` ni `ANTHROPIC_API_KEY` al cliente:
 ninguna tiene el prefijo `NEXT_PUBLIC_` y solo se leen desde código de servidor (API routes,
-Server Components, Server Actions, middleware). La clave secreta de Supabase (antes
-`SUPABASE_SERVICE_ROLE_KEY`, hoy "Secret key") no se usa en esta fase — el cliente de servidor
-(`lib/supabase/server.ts`) opera con la misma clave pública que el navegador y respeta Row Level
-Security.
+Server Components, Server Actions, middleware) — `lib/meta/real/` además usa el paquete
+`server-only`, que hace fallar el build si alguno de sus módulos se importa por error desde un
+componente cliente. La clave secreta de Supabase (antes `SUPABASE_SERVICE_ROLE_KEY`, hoy "Secret
+key") no se usa en esta fase — el cliente de servidor (`lib/supabase/server.ts`) opera con la
+misma clave pública que el navegador y respeta Row Level Security.
 
 ## 6. Estructura de carpetas
 
@@ -129,8 +132,9 @@ Ver el árbol de la sección 2. Cada carpeta de `lib/` tiene una responsabilidad
   determinista de métricas diarias (`metrics-generator.ts`) con tendencias, estacionalidad y
   casos "guionizados" (fatiga de audiencia, campañas sin resultados, picos de CPC...) para que
   las alertas y los creativos ganadores tengan sentido.
-- `lib/meta` — la interfaz `IMetaAdsService` y su única implementación actual,
-  `MockMetaAdsService`.
+- `lib/meta` — la interfaz `IMetaAdsService` y `MockMetaAdsService` (usada por `getMetaAdsService()`
+  para el modo demo). La integración real de lectura vive aparte, en `lib/meta/real/`, y solo se
+  usa desde `app/api/meta/*` (ver sección 8) — nunca desde `getMetaAdsService()`.
 - `lib/ai` — la interfaz `IAIAnalystService` y su implementación mock (`MockAIAnalystService`).
 - `lib/alerts` — reglas de negocio que convierten métricas en `PerformanceAlert[]`.
 - `lib/supabase` — clientes de Supabase + `schema.sql` de referencia (no ejecutado).
@@ -146,16 +150,40 @@ métricas de cada día se derivan matemáticamente de ese perfil — no son núm
 `lib/meta/mock-service.ts` implementa `IMetaAdsService` leyendo ese dataset y añade una pequeña
 latencia simulada para que los estados de carga (skeletons) tengan sentido.
 
-## 8. Dónde conectaremos Meta Marketing API
+## 8. Meta Marketing API (activo, modo lectura)
 
-1. Rellenar `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` en
-   `.env.local`.
-2. Crear `lib/meta/real-service.ts` implementando `IMetaAdsService` (definida en
-   `lib/meta/service.ts`) con llamadas reales a la Graph API.
-3. En `lib/meta/index.ts`, dentro de `getMetaAdsService()`, sustituir el `console.warn` por
-   `return new RealMetaAdsService()` cuando `isMetaApiConfigured()` sea `true`.
+1. Define `META_ACCESS_TOKEN` en `.env.local` — es la única variable necesaria. Las cuentas
+   publicitarias accesibles con ese token se descubren automáticamente vía `/me/adaccounts`, no
+   hace falta fijar `META_AD_ACCOUNT_ID`.
+2. Reinicia `npm run dev`. El selector de cliente de la topbar mostrará una sección "Cuentas Meta
+   (real)" además de los clientes demo — sin tocar código.
+3. Selecciona una cuenta real (`act_...`) para ver campañas, ad sets, anuncios y métricas reales
+   en vez de mock, en las mismas pantallas (Overview, Campañas, Conjuntos, Anuncios, Creativos).
 
-Ningún componente de UI cambia: todos consumen `getMetaAdsService()`.
+**Arquitectura:** a diferencia de Supabase (cuyo cliente puede llamarse desde el navegador de
+forma segura), el token de Meta **nunca** llega al frontend. La integración real vive en
+`lib/meta/real/` (cliente de Graph API, mapeos de status/objetivo/dinero, interpretación de
+`actions`, fetchers por entidad) y solo se usa desde Route Handlers server-only:
+
+- `GET /api/meta/accounts` — descubre cuentas accesibles con el token.
+- `GET /api/meta/overview?accountId=&from=&to=` — KPIs de cuenta + serie diaria.
+- `GET /api/meta/campaigns` / `/api/meta/adsets` / `/api/meta/ads` (mismos parámetros) — listado +
+  métricas agregadas por entidad.
+
+El frontend solo llama a estos endpoints internos (nunca a `getMetaAdsService()`, que sigue
+siendo exclusivamente mock — ver `lib/meta/index.ts`). `hooks/use-account-metrics.ts`,
+`use-campaigns.ts`, `use-adsets.ts` y `use-ads.ts` deciden qué fuente usar mirando un único dato:
+si el `clientId` seleccionado empieza por `act_` (cuenta real) o no (cliente demo).
+
+**Qué sigue siendo mock siempre**, independientemente de la cuenta seleccionada: la vista de
+detalle de campaña (`/campaigns/[id]`), el módulo de Alertas y el AI Performance Analyst — no
+están conectados a datos reales todavía.
+
+**Interpretación de resultados:** Meta no expone un campo único de "resultados"; los devuelve
+desglosados por `action_type` en `actions`/`cost_per_action_type`. `lib/meta/real/actions.ts`
+elige, para cada objetivo de campaña, el `action_type` que Meta considera el resultado principal
+(p. ej. `lead` para generación de leads, `link_click` para tráfico) — nunca suma tipos de acción
+heterogéneos entre sí. Si esa acción no viene en la respuesta, no se fabrica un valor.
 
 ## 9. Dónde conectaremos Claude (Anthropic)
 

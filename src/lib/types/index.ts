@@ -33,6 +33,19 @@ export interface AdAccount {
   timezone: string;
 }
 
+/**
+ * Cuenta publicitaria real de Meta, tal como la devuelve `/me/adaccounts`
+ * (vía `/api/meta/accounts`). Se distingue de un `Client` mock porque su
+ * `id` siempre tiene el prefijo `act_` — así el resto de la app puede saber,
+ * con solo mirar el id seleccionado, si debe pedir datos mock o reales.
+ */
+export interface MetaAdAccountSummary {
+  id: string; // "act_XXXXXXXXXX"
+  name: string;
+  accountStatus: number;
+  currency: string;
+}
+
 // ---------------------------------------------------------------------------
 // Jerarquía de campañas (Campaign > AdSet > Ad)
 // ---------------------------------------------------------------------------
@@ -52,9 +65,19 @@ export interface Campaign {
   adAccountId: string;
   name: string;
   status: EntityStatus;
+  /** Estado granular devuelto por Meta (`effective_status`), cuando aplica. Solo informativo. */
+  effectiveStatus?: string;
   objective: CampaignObjective;
-  dailyBudget: number;
-  startDate: string; // YYYY-MM-DD
+  /** Valor de `objective` tal como lo devuelve Meta, antes de normalizarlo al enum local. */
+  rawObjective?: string;
+  /**
+   * `null` cuando el dato no está disponible (p. ej. la campaña usa
+   * presupuesto a nivel de ad set, o Meta no lo reporta) — nunca se fabrica
+   * un valor por defecto.
+   */
+  dailyBudget: number | null;
+  lifetimeBudget?: number | null;
+  startDate?: string; // YYYY-MM-DD
 }
 
 export interface AdSet {
@@ -62,11 +85,13 @@ export interface AdSet {
   campaignId: string;
   name: string;
   status: EntityStatus;
-  dailyBudget: number;
-  /** Descripción legible de la audiencia objetivo. */
+  effectiveStatus?: string;
+  dailyBudget: number | null;
+  lifetimeBudget?: number | null;
+  /** Descripción legible de la audiencia objetivo. "—" cuando no se solicitó/no está disponible. */
   audience: string;
   optimizationGoal: string;
-  startDate: string; // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD
 }
 
 export type CreativeType = "IMAGE" | "VIDEO" | "CAROUSEL";
@@ -77,10 +102,11 @@ export interface Ad {
   campaignId: string;
   name: string;
   status: EntityStatus;
+  effectiveStatus?: string;
   creativeType: CreativeType;
   /** Gradiente/color usado como placeholder visual del creativo. */
   previewGradient: string;
-  startDate: string; // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD
 }
 
 // ---------------------------------------------------------------------------

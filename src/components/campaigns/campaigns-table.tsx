@@ -9,7 +9,16 @@ import type { CampaignWithMetrics } from "@/hooks/use-campaigns";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
 import { OBJECTIVE_LABELS } from "@/lib/utils/labels";
 
-export function CampaignsTable({ campaigns, loading }: { campaigns: CampaignWithMetrics[]; loading: boolean }) {
+export function CampaignsTable({
+  campaigns,
+  loading,
+  disableRowClick = false,
+}: {
+  campaigns: CampaignWithMetrics[];
+  loading: boolean;
+  /** La vista de detalle de campaña solo existe para datos mock por ahora. */
+  disableRowClick?: boolean;
+}) {
   const router = useRouter();
 
   const columns: DataTableColumn<CampaignWithMetrics>[] = [
@@ -36,8 +45,8 @@ export function CampaignsTable({ campaigns, loading }: { campaigns: CampaignWith
       key: "dailyBudget",
       label: "Presupuesto/día",
       align: "right",
-      sortValue: (c) => c.dailyBudget,
-      render: (c) => formatCurrency(c.dailyBudget),
+      sortValue: (c) => c.dailyBudget ?? -1,
+      render: (c) => (c.dailyBudget !== null ? formatCurrency(c.dailyBudget) : "—"),
     },
     {
       key: "spend",
@@ -88,7 +97,7 @@ export function CampaignsTable({ campaigns, loading }: { campaigns: CampaignWith
       columns={columns}
       rows={campaigns}
       keyExtractor={(c) => c.id}
-      onRowClick={(c) => router.push(`/campaigns/${c.id}`)}
+      onRowClick={disableRowClick ? undefined : (c) => router.push(`/campaigns/${c.id}`)}
       loading={loading}
       defaultSortKey="spend"
       emptyState={

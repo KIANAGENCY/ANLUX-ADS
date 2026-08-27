@@ -8,9 +8,10 @@ import { useFilters } from "@/components/providers/filters-provider";
 import { buildFunnelStages } from "@/lib/utils/funnel";
 import { formatDateLong } from "@/lib/utils/dates";
 import { Card } from "@/components/ui/card";
+import { ErrorBanner } from "@/components/ui/error-banner";
 
 export default function OverviewPage() {
-  const { loading, comparison, dailyRows } = useAccountMetrics();
+  const { loading, comparison, dailyRows, error } = useAccountMetrics();
   const { clientId, dateRange } = useFilters();
 
   return (
@@ -20,6 +21,8 @@ export default function OverviewPage() {
           {formatDateLong(dateRange.from)} — {formatDateLong(dateRange.to)}
         </p>
       </div>
+
+      {error && <ErrorBanner message={error} />}
 
       <MetricsGrid />
 

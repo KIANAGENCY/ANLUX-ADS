@@ -5,11 +5,12 @@ import { Trophy } from "lucide-react";
 import { WinnerCard } from "@/components/creatives/winner-card";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { useAds } from "@/hooks/use-ads";
 import { computeCreativeWinners } from "@/lib/utils/creatives";
 
 export default function CreativesPage() {
-  const { loading, ads } = useAds();
+  const { loading, ads, error } = useAds();
   const winners = useMemo(() => computeCreativeWinners(ads), [ads]);
 
   return (
@@ -17,6 +18,8 @@ export default function CreativesPage() {
       <p className="text-sm text-muted-foreground">
         Anuncios que lideran en al menos una métrica clave durante el periodo seleccionado.
       </p>
+
+      {error && <ErrorBanner message={error} />}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
