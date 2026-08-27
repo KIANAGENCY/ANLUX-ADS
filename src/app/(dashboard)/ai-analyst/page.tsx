@@ -34,16 +34,21 @@ export default function AIAnalystPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId, dateRange, question }),
       });
-      const analysis: AIAnalysis = await res.json();
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof data?.error === "string" ? data.error : "No se pudo generar el análisis.");
+      }
+      const analysis: AIAnalysis = data;
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", analysis }]);
-    } catch {
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "assistant",
           analysis: {
-            summary: "No se pudo generar el análisis. Intenta de nuevo en unos segundos.",
+            summary:
+              err instanceof Error ? err.message : "No se pudo generar el análisis. Intenta de nuevo en unos segundos.",
             issues: [],
             opportunities: [],
             recommendations: [],

@@ -1,4 +1,5 @@
 import { MockAIAnalystService } from "./mock-analyst";
+import { ClaudeAIAnalystService, isAnthropicConfigured } from "./claude-service";
 import type { IAIAnalystService } from "./types";
 
 export type { AIAnalysisRequest, IAIAnalystService } from "./types";
@@ -6,17 +7,16 @@ export type { AIAnalysisRequest, IAIAnalystService } from "./types";
 let instance: IAIAnalystService | null = null;
 
 /**
- * Punto único de acceso al analista de IA. Igual que `getMetaAdsService()`,
- * hoy siempre devuelve la implementación mock. Cuando `lib/ai/claude-service.ts`
- * esté completo, este es el único lugar que hay que tocar:
+ * Punto único de acceso al analista de IA. Devuelve `ClaudeAIAnalystService`
+ * cuando `ANTHROPIC_API_KEY` está configurada; si no, cae automáticamente a
+ * `MockAIAnalystService` (modo demo/desarrollo sin credenciales).
  *
- *   if (isAnthropicConfigured()) return new ClaudeAIAnalystService();
- *
- * Solo debe importarse desde código de servidor (API routes / Server Actions).
+ * Solo debe importarse desde código de servidor (API routes / Server
+ * Actions) — ver `app/api/ai/analyze/route.ts`.
  */
 export function getAIAnalystService(): IAIAnalystService {
   if (!instance) {
-    instance = new MockAIAnalystService();
+    instance = isAnthropicConfigured() ? new ClaudeAIAnalystService() : new MockAIAnalystService();
   }
   return instance;
 }
