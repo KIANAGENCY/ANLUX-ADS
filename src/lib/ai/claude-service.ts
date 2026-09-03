@@ -46,6 +46,15 @@ export class AIAnalystError extends Error {
  */
 export class ClaudeAIAnalystService implements IAIAnalystService {
   async analyze(request: AIAnalysisRequest): Promise<AIAnalysis> {
+    // Sin credencial no hay análisis: se falla con un error explícito en vez
+    // de devolver texto simulado.
+    if (!isAnthropicConfigured()) {
+      throw new AIAnalystError(
+        "auth",
+        "El servicio de IA no está configurado en el servidor. Contacta al administrador."
+      );
+    }
+
     const client = new Anthropic();
 
     let response;

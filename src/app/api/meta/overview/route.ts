@@ -7,8 +7,7 @@ import { aggregateMetrics, compareMetrics } from "@/lib/utils/metrics";
 
 /**
  * KPIs de cuenta (comparación periodo actual/anterior) + serie diaria, para
- * el Overview. Equivalente real de lo que `hooks/use-account-metrics.ts`
- * calcula a partir del servicio mock.
+ * el Overview. Lo consume `hooks/use-account-metrics.ts`.
  */
 export async function GET(req: NextRequest) {
   const parsed = parseAccountRangeParams(req.nextUrl.searchParams);

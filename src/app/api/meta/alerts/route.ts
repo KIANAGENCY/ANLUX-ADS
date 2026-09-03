@@ -4,9 +4,8 @@ import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { parseAccountRangeParams } from "@/lib/meta/real/request-params";
 
 /**
- * Alertas de performance para una cuenta REAL de Meta. Equivalente real de
- * lo que `hooks/use-alerts.ts` calcula en el cliente para clientes DEMO vía
- * `generateMockAlerts()`. Nunca recurre al dataset simulado: si Meta no
+ * Alertas de performance de una cuenta de Meta, calculadas por
+ * `generateRealAlerts()` sobre datos de Meta Marketing API. Si Meta no
  * devuelve campañas o ad sets, la lista de alertas queda vacía.
  */
 export async function GET(req: NextRequest) {

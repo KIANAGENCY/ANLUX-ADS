@@ -18,7 +18,7 @@ function endOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
-/** Referencia "hoy" para todos los cálculos de mock, fijada a medianoche UTC. */
+/** Referencia "hoy" para todos los cálculos de rangos, fijada a medianoche UTC. */
 export function getToday(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));

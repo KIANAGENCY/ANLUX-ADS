@@ -2,7 +2,7 @@
  * Modelos de dominio compartidos por toda la aplicación.
  *
  * Estos tipos representan la forma "canónica" de los datos, independientemente
- * de si provienen del servicio mock (`lib/mock`) o, en el futuro, de la Meta
+ * de si provienen de Meta Marketing API o de futuras fuentes de datos.
  * Marketing API real (`lib/meta`). Cualquier UI o lógica de negocio debe
  * consumir únicamente estos tipos, nunca la forma cruda de la respuesta de
  * un proveedor externo.
@@ -27,7 +27,7 @@ export interface Client {
 export interface AdAccount {
   id: string;
   clientId: string;
-  /** ID de cuenta en Meta, formato "act_XXXXXXXXXX". Placeholder en modo mock. */
+  /** ID de cuenta en Meta, formato "act_XXXXXXXXXX". */
   metaAccountId: string;
   currency: string;
   timezone: string;
@@ -35,9 +35,9 @@ export interface AdAccount {
 
 /**
  * Cuenta publicitaria real de Meta, tal como la devuelve `/me/adaccounts`
- * (vía `/api/meta/accounts`). Se distingue de un `Client` mock porque su
+ * (vía `/api/meta/accounts`). Es la única fuente de cuentas del selector: su
  * `id` siempre tiene el prefijo `act_` — así el resto de la app puede saber,
- * con solo mirar el id seleccionado, si debe pedir datos mock o reales.
+ * id ("act_XXXXXXXXXX") es el que se pasa a los endpoints /api/meta/*.
  */
 export interface MetaAdAccountSummary {
   id: string; // "act_XXXXXXXXXX"

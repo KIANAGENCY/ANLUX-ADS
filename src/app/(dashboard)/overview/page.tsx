@@ -13,7 +13,7 @@ import { ErrorBanner } from "@/components/ui/error-banner";
 
 export default function OverviewPage() {
   const { loading, comparison, dailyRows, error } = useAccountMetrics();
-  const { clientId, dateRange } = useFilters();
+  const { dateRange } = useFilters();
 
   return (
     <div className="space-y-6">
@@ -34,7 +34,7 @@ export default function OverviewPage() {
       {loading || !comparison ? (
         <Card className="h-64 animate-pulse" />
       ) : (
-        <Funnel stages={buildFunnelStages(comparison.current, clientId)} />
+        <Funnel stages={buildFunnelStages(comparison.current)} />
       )}
     </div>
   );

@@ -12,12 +12,9 @@ import { OBJECTIVE_LABELS } from "@/lib/utils/labels";
 export function CampaignsTable({
   campaigns,
   loading,
-  disableRowClick = false,
 }: {
   campaigns: CampaignWithMetrics[];
   loading: boolean;
-  /** La vista de detalle de campaña solo existe para datos mock por ahora. */
-  disableRowClick?: boolean;
 }) {
   const router = useRouter();
 
@@ -97,7 +94,7 @@ export function CampaignsTable({
       columns={columns}
       rows={campaigns}
       keyExtractor={(c) => c.id}
-      onRowClick={disableRowClick ? undefined : (c) => router.push(`/campaigns/${c.id}`)}
+      onRowClick={(c) => router.push(`/campaigns/${c.id}`)}
       loading={loading}
       defaultSortKey="spend"
       emptyState={

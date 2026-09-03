@@ -1,5 +1,4 @@
 import type { PerformanceMetrics } from "@/lib/types";
-import { createRng, hashStringToSeed, randomBetween } from "@/lib/mock/random";
 
 export interface FunnelStage {
   label: string;
@@ -9,21 +8,17 @@ export interface FunnelStage {
 }
 
 /**
- * Deriva las 4 etapas del funnel (Impresiones → Clics → Conversaciones/Leads
- * → Resultados) a partir de las métricas agregadas. "Resultados" en Meta ya
- * representa el objetivo de la campaña (leads, mensajes, compras...), así
- * que aquí lo tratamos como el subconjunto de conversaciones que efectivamente
- * se cierran/califican, usando una tasa de cierre estable por cliente.
+ * Deriva las etapas del funnel (Impresiones → Clics → Resultados) a partir de
+ * las métricas reales agregadas de Meta. "Resultados" en Meta ya representa el
+ * objetivo de la campaña (leads, mensajes, compras...), así que es la última
+ * etapa real disponible: no se deriva ninguna etapa adicional que Meta no
+ * reporte.
  */
-export function buildFunnelStages(metrics: PerformanceMetrics, seedKey: string): FunnelStage[] {
-  const rng = createRng(hashStringToSeed(`funnel:${seedKey}`));
-  const closeRate = randomBetween(rng, 0.62, 0.82);
-
+export function buildFunnelStages(metrics: PerformanceMetrics): FunnelStage[] {
   const rawStages = [
     { label: "Impresiones", value: metrics.impressions },
     { label: "Clics", value: metrics.clicks },
-    { label: "Conversaciones / Leads", value: metrics.results },
-    { label: "Resultados", value: Math.round(metrics.results * closeRate) },
+    { label: "Resultados", value: metrics.results },
   ];
 
   return rawStages.map((stage, index) => ({

@@ -75,8 +75,9 @@ export default function SettingsPage() {
             sin sustituirlo por datos simulados.
           </p>
           <p>
-            Los clientes marcados como DEMO en el selector usan siempre datos simulados y no dependen de estas
-            integraciones.
+            ANLUX funciona exclusivamente con datos reales de Meta Marketing API: no existe modo demo ni
+            ningún conjunto de datos simulado. Si una cuenta no tiene actividad en el periodo seleccionado, las
+            secciones muestran su estado vacío en lugar de rellenarlo con información inventada.
           </p>
         </CardContent>
       </Card>

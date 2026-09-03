@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
-import { getMetaAdsService } from "@/lib/meta";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAds } from "@/lib/meta/real/ads";
@@ -29,8 +28,8 @@ interface GatheredData {
 
 const META_ACCOUNT_COLOR = "#1877F2";
 
-/** Cuenta real de Meta: campañas + anuncios + métricas del periodo, todo vía `lib/meta/real/`. */
-async function gatherRealData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
+/** Campañas + anuncios + métricas del periodo de la cuenta, todo vía `lib/meta/real/`. */
+async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
 
   const [accounts, campaigns] = await Promise.all([fetchAdAccounts(), fetchRealCampaigns(accountId)]);
@@ -119,51 +118,10 @@ async function gatherRealData(accountId: string, dateRange: DateRange): Promise<
   };
 }
 
-/** Cliente demo: exactamente el mismo camino que antes, contra el servicio mock. */
-async function gatherMockData(clientId: string, dateRange: DateRange): Promise<GatheredData | null> {
-  const metaService = getMetaAdsService();
-  const client = await metaService.getClient(clientId);
-  if (!client) return null;
-
-  const previousRange = getPreviousPeriod(dateRange);
-  const [campaigns, ads] = await Promise.all([metaService.getCampaigns(clientId), metaService.getAds(clientId)]);
-
-  const campaignMetrics: Record<string, PerformanceMetrics> = {};
-  const previousCampaignMetrics: PerformanceMetrics[] = [];
-  await Promise.all(
-    campaigns.map(async (c) => {
-      const [rows, previousRows] = await Promise.all([
-        metaService.getDailyMetrics("campaign", c.id, dateRange),
-        metaService.getDailyMetrics("campaign", c.id, previousRange),
-      ]);
-      campaignMetrics[c.id] = aggregateMetrics(rows);
-      previousCampaignMetrics.push(aggregateMetrics(previousRows));
-    })
-  );
-
-  const adMetrics: Record<string, PerformanceMetrics> = {};
-  await Promise.all(
-    ads.map(async (a) => {
-      const rows = await metaService.getDailyMetrics("ad", a.id, dateRange);
-      adMetrics[a.id] = aggregateMetrics(rows);
-    })
-  );
-
-  return {
-    client,
-    campaigns,
-    ads,
-    campaignMetrics,
-    adMetrics,
-    currentMetrics: combineAccountMetrics(Object.values(campaignMetrics)),
-    previousMetrics: combineAccountMetrics(previousCampaignMetrics),
-  };
-}
-
 function noDataAnalysis(): AIAnalysis {
   return {
     summary:
-      "No hay suficientes datos publicitarios en esta cuenta para el periodo seleccionado — no encontré campañas con actividad para analizar. Prueba a ampliar el rango de fechas, o selecciona un cliente demo (Orthobasic / Hotel Expert) para explorar el AI Analyst con datos simulados.",
+      "No hay datos publicitarios en esta cuenta para el periodo seleccionado — no encontré campañas con actividad que analizar. Prueba a ampliar el rango de fechas o a seleccionar otra cuenta.",
     issues: [],
     opportunities: [],
     recommendations: [],
@@ -175,17 +133,14 @@ function noDataAnalysis(): AIAnalysis {
 /**
  * Backend del "AI Performance Analyst".
  *
- * El frontend nunca llama a Anthropic directamente: envía aquí el cliente,
- * el rango de fechas y (opcionalmente) una pregunta. Este endpoint reúne
- * campañas, anuncios y métricas — de Meta real (`lib/meta/real/`) si
- * `clientId` es una cuenta real (prefijo "act_"), o del servicio mock si es
- * un cliente demo — y se los pasa a `getAIAnalystService()`, que hoy es
- * Claude (Sonnet 5) si `ANTHROPIC_API_KEY` está configurada, o el analista
- * simulado si no.
+ * El frontend nunca llama a Anthropic directamente: envía aquí la cuenta, el
+ * rango de fechas y (opcionalmente) una pregunta. Este endpoint reúne
+ * campañas, anuncios y métricas exclusivamente de Meta Marketing API
+ * (`lib/meta/real/`) y se los pasa a `getAIAnalystService()` (Claude).
  *
- * Si no hay campañas ni gasto/impresiones en el periodo (solo puede pasar
- * con cuentas reales — los clientes demo siempre tienen datos), se devuelve
- * un estado vacío claro sin llamar a Anthropic en absoluto.
+ * Claude solo recibe métricas reales: no existe ninguna fuente simulada. Si
+ * no hay campañas ni gasto/impresiones en el periodo, se devuelve un estado
+ * vacío explícito sin llamar a Anthropic en absoluto.
  */
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
@@ -200,17 +155,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "clientId y dateRange son obligatorios" }, { status: 400 });
   }
 
-  const isRealAccount = clientId.startsWith("act_");
-
-  let data: GatheredData | null;
+  let data: GatheredData;
   try {
-    data = isRealAccount ? await gatherRealData(clientId, dateRange) : await gatherMockData(clientId, dateRange);
+    data = await gatherAccountData(clientId, dateRange);
   } catch (err) {
     return metaErrorResponse(err);
-  }
-
-  if (!data) {
-    return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   }
 
   if (data.campaigns.length === 0 || (data.currentMetrics.spend === 0 && data.currentMetrics.impressions === 0)) {

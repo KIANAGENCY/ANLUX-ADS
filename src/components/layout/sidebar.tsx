@@ -13,7 +13,6 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useFilters } from "@/components/providers/filters-provider";
 import { cn } from "@/lib/utils/cn";
 
 export const NAV_ITEMS = [
@@ -40,7 +39,6 @@ const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { isRealAccount } = useFilters();
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border-subtle bg-[#070A11]">
@@ -97,14 +95,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           );
         })}
       </nav>
-
-      {!isRealAccount && (
-        <div className="border-t border-border-subtle px-4 py-4">
-          <p className="text-[11px] leading-relaxed text-muted-foreground-2">
-            MVP en modo demo · datos simulados
-          </p>
-        </div>
-      )}
     </aside>
   );
 }

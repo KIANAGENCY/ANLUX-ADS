@@ -3,8 +3,8 @@ import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMet
 /**
  * Todo lo que el analista de IA necesita para razonar sobre una cuenta.
  * Se construye en el servidor (ver `app/api/ai/analyze/route.ts`) a partir
- * de `getMetaAdsService()` y se pasa tal cual a la implementación de
- * `IAIAnalystService` (mock o Claude real).
+ * de Meta Marketing API y se pasa tal cual a la implementación de
+ * `IAIAnalystService` (Claude).
  */
 export interface AIAnalysisRequest {
   client: Client;
