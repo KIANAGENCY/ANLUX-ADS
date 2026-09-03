@@ -10,11 +10,11 @@ export function Badge({
   variant?: "neutral" | "positive" | "negative" | "warning" | "accent";
 }) {
   const variants: Record<string, string> = {
-    neutral: "bg-white/6 text-foreground/80 border-white/10",
+    neutral: "bg-surface-2 text-muted-foreground border-border-subtle",
     positive: "bg-positive/10 text-positive border-positive/25",
     negative: "bg-negative/10 text-negative border-negative/25",
     warning: "bg-warning/10 text-warning border-warning/25",
-    accent: "bg-accent/15 text-[#b3b3ff] border-accent/30",
+    accent: "bg-accent/15 text-accent-light border-accent/30",
   };
 
   return (

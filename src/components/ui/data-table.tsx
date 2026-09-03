@@ -69,12 +69,12 @@ export function DataTable<T>({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-white/8 text-left">
+          <tr className="border-b border-border-subtle text-left">
             {columns.map((column) => (
               <th
                 key={column.key}
                 className={cn(
-                  "px-4 py-3 text-xs font-medium text-muted-foreground select-none whitespace-nowrap",
+                  "px-4 py-2.5 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground-2 uppercase select-none whitespace-nowrap",
                   column.align === "right" && "text-right",
                   column.sortValue && "cursor-pointer hover:text-foreground"
                 )}
@@ -103,15 +103,15 @@ export function DataTable<T>({
               key={keyExtractor(row)}
               onClick={() => onRowClick?.(row)}
               className={cn(
-                "border-b border-white/5 last:border-0",
-                onRowClick && "cursor-pointer hover:bg-white/4"
+                "border-b border-border-subtle/60 transition-colors last:border-0",
+                onRowClick && "cursor-pointer hover:bg-surface-2/60"
               )}
             >
               {columns.map((column) => (
                 <td
                   key={column.key}
                   className={cn(
-                    "px-4 py-3 whitespace-nowrap text-foreground/90",
+                    "px-4 py-3 whitespace-nowrap text-foreground/90 tabular-nums",
                     column.align === "right" && "text-right",
                     column.className
                   )}

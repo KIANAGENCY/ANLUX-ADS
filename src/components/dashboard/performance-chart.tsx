@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -69,8 +69,8 @@ export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; load
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 metric === option.key
-                  ? "gradient-accent text-white"
-                  : "bg-white/6 text-muted-foreground hover:text-foreground"
+                  ? "bg-accent text-white"
+                  : "bg-surface-2 text-muted-foreground hover:text-foreground"
               )}
             >
               {option.label}
@@ -87,34 +87,34 @@ export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; load
           <EmptyState icon={LineChartIcon} title="Sin datos en este rango" description="Prueba a ampliar el rango de fechas." />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
               <defs>
-                <linearGradient id="lineStroke" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#6d6df6" />
-                  <stop offset="100%" stopColor="#9c5cf0" />
+                <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#ffffff0f" vertical={false} />
+              <CartesianGrid stroke="#141C28" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDateShort}
-                tick={{ fill: "#9395a8", fontSize: 11 }}
-                axisLine={{ stroke: "#ffffff14" }}
+                tick={{ fill: "#475569", fontSize: 11 }}
+                axisLine={{ stroke: "#1D2635" }}
                 tickLine={false}
                 minTickGap={24}
               />
               <YAxis
-                tick={{ fill: "#9395a8", fontSize: 11 }}
+                tick={{ fill: "#475569", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 width={48}
                 tickFormatter={(v) => (metric === "spend" || metric === "cpc" ? `$${v}` : String(v))}
               />
               <RechartsTooltip
-                cursor={{ stroke: "#ffffff22" }}
+                cursor={{ stroke: "#2C3A4F" }}
                 contentStyle={{
-                  background: "#12141f",
-                  border: "1px solid #ffffff1a",
+                  background: "#111827",
+                  border: "1px solid #2C3A4F",
                   borderRadius: 10,
                   fontSize: 12,
                 }}
@@ -124,15 +124,16 @@ export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; load
                   METRIC_OPTIONS.find((o) => o.key === metric)?.label,
                 ]}
               />
-              <Line
+              <Area
                 type="monotone"
                 dataKey="value"
-                stroke="url(#lineStroke)"
-                strokeWidth={2.5}
+                stroke="#2563EB"
+                strokeWidth={2}
+                fill="url(#areaFill)"
                 dot={false}
-                activeDot={{ r: 4, fill: "#9c5cf0" }}
+                activeDot={{ r: 4, fill: "#2563EB", stroke: "#0D121C", strokeWidth: 2 }}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         )}
       </div>

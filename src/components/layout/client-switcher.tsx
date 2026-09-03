@@ -34,7 +34,7 @@ export function ClientSwitcher() {
   return (
     <Dropdown
       trigger={
-        <span className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-sm hover:bg-white/7">
+        <span className="flex items-center gap-2.5 rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-2">
           <span
             className="flex size-6 items-center justify-center rounded-md text-[11px] font-semibold text-white"
             style={{ backgroundColor: current.color }}
@@ -43,12 +43,14 @@ export function ClientSwitcher() {
           </span>
           <span className="flex flex-col items-start leading-tight">
             <span className="font-medium text-foreground">{current.name}</span>
-            <span className="text-[11px] text-muted-foreground">{current.subtitle}</span>
+            <span className="text-[11px] text-muted-foreground-2">{current.subtitle}</span>
           </span>
           <span
             className={
-              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide " +
-              (isRealAccount ? "bg-[#1877F2]/15 text-[#5b9bf7]" : "bg-white/8 text-muted-foreground")
+              "rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-[0.08em] " +
+              (isRealAccount
+                ? "bg-positive/12 text-positive ring-1 ring-positive/25"
+                : "bg-warning/12 text-warning ring-1 ring-warning/25")
             }
           >
             {isRealAccount ? "REAL" : "DEMO"}
@@ -59,7 +61,7 @@ export function ClientSwitcher() {
     >
       {(close) => (
         <>
-          <p className="px-3.5 pb-1.5 pt-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="px-3.5 pb-1.5 pt-1 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground-2 uppercase">
             Clientes (demo)
           </p>
           {MOCK_CLIENTS.map((client) => (
@@ -79,14 +81,14 @@ export function ClientSwitcher() {
               </span>
               <span className="flex flex-col items-start leading-tight">
                 <span>{client.name}</span>
-                <span className="text-[11px] text-muted-foreground">{client.industry}</span>
+                <span className="text-[11px] text-muted-foreground-2">{client.industry}</span>
               </span>
             </DropdownItem>
           ))}
 
           {realAccounts.length > 0 && (
             <>
-              <p className="mt-1 flex items-center gap-1.5 border-t border-white/8 px-3.5 pb-1.5 pt-2.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              <p className="mt-1 flex items-center gap-1.5 border-t border-border-subtle px-3.5 pb-1.5 pt-2.5 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground-2 uppercase">
                 <Radio className="size-3" />
                 Cuentas Meta (real)
               </p>
@@ -107,7 +109,7 @@ export function ClientSwitcher() {
                   </span>
                   <span className="flex flex-col items-start leading-tight">
                     <span>{account.name}</span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground-2">
                       {account.id} · {account.currency}
                     </span>
                   </span>

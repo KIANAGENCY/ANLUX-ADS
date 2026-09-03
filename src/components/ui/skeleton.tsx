@@ -2,13 +2,13 @@ import { cn } from "@/lib/utils/cn";
 
 export function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("relative overflow-hidden rounded-md bg-white/6 skeleton-shimmer", className)} />
+    <div className={cn("relative overflow-hidden rounded-md bg-surface-2 skeleton-shimmer", className)} />
   );
 }
 
 export function CardSkeleton() {
   return (
-    <div className="rounded-xl border border-white/8 bg-surface p-5">
+    <div className="rounded-xl border border-border-subtle bg-surface p-4">
       <Skeleton className="h-3 w-24" />
       <Skeleton className="mt-4 h-7 w-32" />
       <Skeleton className="mt-3 h-3 w-20" />

@@ -28,7 +28,7 @@ const INTEGRATIONS = [
 
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Estado de integraciones</CardTitle>
@@ -37,22 +37,22 @@ export default function SettingsPage() {
           {INTEGRATIONS.map((integration) => (
             <div
               key={integration.name}
-              className="flex items-start justify-between gap-4 rounded-lg border border-white/8 p-4"
+              className="flex items-start justify-between gap-4 rounded-lg border border-border-subtle bg-background/40 p-4"
             >
               <div className="space-y-1.5">
-                <p className="text-sm font-medium text-foreground">{integration.name}</p>
+                <p className="text-sm font-semibold text-foreground">{integration.name}</p>
                 <p className="text-xs text-muted-foreground">{integration.description}</p>
-                <p className="text-[11px] text-muted-foreground/70">
+                <p className="text-[11px] text-muted-foreground-2">
                   Variables: <code className="font-mono">{integration.envVars.join(", ")}</code>
                 </p>
               </div>
-              <Badge variant={integration.configured ? "positive" : "neutral"} className="shrink-0">
+              <Badge variant={integration.configured ? "positive" : "warning"} className="shrink-0">
                 {integration.configured ? (
                   <CheckCircle2 className="size-3" />
                 ) : (
                   <CircleDashed className="size-3" />
                 )}
-                {integration.configured ? "Configurado" : "Modo mock"}
+                {integration.configured ? "Configurado" : "Sin configurar"}
               </Badge>
             </div>
           ))}
@@ -61,18 +61,22 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Sobre este MVP</CardTitle>
+          <CardTitle>Cómo leer este estado</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            ANLUX Ads Intelligence está funcionando en modo demo: todos los datos que ves (clientes,
-            campañas, métricas) son simulados para poder evaluar el producto antes de conectar
-            credenciales reales.
+            &quot;Configurado&quot; significa únicamente que la variable de entorno existe en el servidor. No
+            garantiza que la credencial siga siendo válida: un token de Meta caducado o revocado se sigue
+            viendo aquí como configurado.
           </p>
           <p>
-            Cuando se configuren las variables de entorno de Meta, Supabase y Anthropic (ver
-            <code className="mx-1 font-mono">.env.example</code>), cada integración se activará sin
-            cambios en la interfaz.
+            El estado real de la conexión aparece en cada sección: si Meta rechaza el token, las páginas de
+            Overview, Campañas, Conjuntos, Anuncios, Creativos y Alertas muestran el error devuelto por la API,
+            sin sustituirlo por datos simulados.
+          </p>
+          <p>
+            Los clientes marcados como DEMO en el selector usan siempre datos simulados y no dependen de estas
+            integraciones.
           </p>
         </CardContent>
       </Card>

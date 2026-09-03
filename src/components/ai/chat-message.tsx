@@ -12,8 +12,8 @@ const PRIORITY_CONFIG = {
 export function UserMessage({ text }: { text: string }) {
   return (
     <div className="flex justify-end gap-2.5">
-      <div className="max-w-lg rounded-2xl rounded-tr-sm bg-white/8 px-4 py-2.5 text-sm text-foreground">{text}</div>
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/8">
+      <div className="max-w-lg rounded-2xl rounded-tr-sm border border-border-subtle bg-surface-2 px-4 py-2.5 text-sm text-foreground">{text}</div>
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-2">
         <User className="size-3.5 text-muted-foreground" />
       </div>
     </div>
@@ -23,10 +23,10 @@ export function UserMessage({ text }: { text: string }) {
 export function AssistantAnalysis({ analysis }: { analysis: AIAnalysis }) {
   return (
     <div className="flex gap-2.5">
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full gradient-accent">
-        <Sparkles className="size-3.5 text-white" />
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-accent-ai/30 bg-accent-ai/15">
+        <Sparkles className="size-3.5 text-accent-ai" />
       </div>
-      <div className="max-w-2xl space-y-3 rounded-2xl rounded-tl-sm border border-white/8 bg-surface px-4 py-3.5 text-sm">
+      <div className="max-w-2xl space-y-3 rounded-2xl rounded-tl-sm border border-border-subtle bg-surface px-4 py-3.5 text-sm">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-muted-foreground">AI Performance Analyst</span>
           <Badge variant={PRIORITY_CONFIG[analysis.priority].variant}>{PRIORITY_CONFIG[analysis.priority].label}</Badge>
@@ -54,10 +54,10 @@ function AnalysisSection({
   tone: "negative" | "positive" | "accent";
 }) {
   if (items.length === 0) return null;
-  const toneColor = { negative: "text-negative", positive: "text-positive", accent: "text-[#b3b3ff]" }[tone];
+  const toneColor = { negative: "text-negative", positive: "text-positive", accent: "text-accent-light" }[tone];
 
   return (
-    <div className="space-y-1.5 border-t border-white/8 pt-3">
+    <div className="space-y-1.5 border-t border-border-subtle pt-3">
       <p className={cn("flex items-center gap-1.5 text-xs font-medium", toneColor)}>
         <Icon className="size-3.5" />
         {title}
@@ -77,10 +77,10 @@ function AnalysisSection({
 export function TypingIndicator() {
   return (
     <div className="flex gap-2.5">
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full gradient-accent">
-        <Sparkles className="size-3.5 text-white" />
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-accent-ai/30 bg-accent-ai/15">
+        <Sparkles className="size-3.5 text-accent-ai" />
       </div>
-      <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm border border-white/8 bg-surface px-4 py-3.5">
+      <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm border border-border-subtle bg-surface px-4 py-3.5">
         {[0, 1, 2].map((i) => (
           <span
             key={i}

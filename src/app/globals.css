@@ -1,29 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #060710;
-  --surface: #0d0e1a;
-  --surface-2: #12142380;
-  --border-subtle: #ffffff14;
-  --foreground: #e8e9f3;
-  --muted-foreground: #9395a8;
-  --accent: #6d6df6;
-  --accent-2: #9c5cf0;
-  --positive: #34d399;
-  --negative: #f87171;
-  --warning: #fbbf24;
+  --background: #05070b;
+  --surface: #0d121c;
+  --surface-2: #111827;
+  --border-subtle: #1d2635;
+  --foreground: #f8fafc;
+  --muted-foreground: #94a3b8;
+  --muted-foreground-2: #64748b;
+  --accent: #2563eb;
+  --accent-2: #1244a3;
+  --accent-light: #60a5fa;
+  --accent-ai: #8b5cf6;
+  --positive: #22c55e;
+  --negative: #ef4444;
+  --warning: #f59e0b;
+  --info: #38bdf8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-subtle: var(--border-subtle);
   --color-foreground: var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
+  --color-muted-foreground-2: var(--muted-foreground-2);
   --color-accent: var(--accent);
   --color-accent-2: var(--accent-2);
+  --color-accent-light: var(--accent-light);
+  --color-accent-ai: var(--accent-ai);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -41,14 +51,14 @@ body {
 /* Scrollbar discreto, coherente con el tema oscuro. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a2d40 transparent;
+  scrollbar-color: #24304a transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: #2a2d40;
+  background-color: #24304a;
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-track {
@@ -56,11 +66,11 @@ body {
 }
 
 .gradient-accent {
-  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background-image: linear-gradient(140deg, var(--accent-2), var(--accent));
 }
 
 .text-gradient-accent {
-  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background-image: linear-gradient(140deg, var(--accent-2), var(--accent));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

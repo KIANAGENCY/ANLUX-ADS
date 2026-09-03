@@ -14,7 +14,7 @@ export function QuickQuestions({ onSelect, disabled }: { onSelect: (question: st
           key={question}
           disabled={disabled}
           onClick={() => onSelect(question)}
-          className="rounded-full border border-white/10 bg-white/4 px-3.5 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:border-accent/40 hover:bg-accent/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full border border-border-subtle bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent-ai/40 hover:bg-accent-ai/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           {question}
         </button>

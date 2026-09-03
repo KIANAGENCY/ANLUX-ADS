@@ -46,30 +46,30 @@ export function MetricCard({
   const positive = isChangePositive(metric, changePercent);
 
   return (
-    <Card className="p-5">
+    <Card className="p-4 transition-colors hover:border-white/12">
       <div className="flex items-center justify-between gap-2">
         <Tooltip content={METRIC_TOOLTIPS[metric]}>
-          <span className="cursor-default text-xs font-medium text-muted-foreground border-b border-dotted border-white/20">
+          <span className="cursor-default border-b border-dotted border-white/15 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground-2 uppercase">
             {METRIC_LABELS[metric]}
           </span>
         </Tooltip>
-        {Icon && <Icon className="size-3.5 text-muted-foreground/60" />}
+        {Icon && <Icon className="size-3.5 text-muted-foreground-2/70" />}
       </div>
 
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+      <p className="mt-3 text-[26px] leading-none font-semibold tracking-tight tabular-nums text-foreground">
         {METRIC_FORMATTERS[metric](value)}
       </p>
 
-      <div className="mt-2 flex items-center gap-1 text-xs">
+      <div className="mt-2.5 flex items-center gap-1.5 text-[11px]">
         {changePercent === null ? (
-          <span className="text-muted-foreground">Sin datos del periodo anterior</span>
+          <span className="text-muted-foreground-2">Sin datos del periodo anterior</span>
         ) : (
           <>
             <span
               className={cn(
-                "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium",
-                positive === true && "bg-positive/10 text-positive",
-                positive === false && "bg-negative/10 text-negative",
+                "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold tabular-nums",
+                positive === true && "bg-positive/12 text-positive",
+                positive === false && "bg-negative/12 text-negative",
                 positive === null && "bg-white/6 text-muted-foreground"
               )}
             >
@@ -82,7 +82,7 @@ export function MetricCard({
               )}
               {formatSignedPercent(changePercent)}
             </span>
-            <span className="text-muted-foreground">vs. periodo anterior</span>
+            <span className="text-muted-foreground-2">vs. periodo anterior</span>
           </>
         )}
       </div>
