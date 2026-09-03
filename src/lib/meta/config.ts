@@ -17,6 +17,12 @@ export const metaConfig = {
   appId: process.env.META_APP_ID,
   appSecret: process.env.META_APP_SECRET,
   adAccountId: process.env.META_AD_ACCOUNT_ID,
+  /**
+   * Business Manager cuyas cuentas de cliente deben incluirse en el
+   * descubrimiento de cuentas (ver `lib/meta/real/accounts.ts`). Opcional:
+   * sin él, solo se consulta `/me/adaccounts`, como antes.
+   */
+  businessId: process.env.META_BUSINESS_ID,
 };
 
 /**
