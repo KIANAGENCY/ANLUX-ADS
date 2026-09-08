@@ -22,12 +22,21 @@ export type MetaApiErrorKind =
 export class MetaApiError extends Error {
   readonly kind: MetaApiErrorKind;
   readonly status?: number;
+  /**
+   * `true` cuando la respuesta traía el objeto `error` de Meta, es decir
+   * cuando quien rechazó la petición fue Graph API y no un intermediario.
+   * Un 401/403 sin ese cuerpo suele venir de un proxy, un firewall o un WAF,
+   * y confundirlo con un problema de token manda a buscar en el sitio
+   * equivocado. Informativo: no cambia `kind`, `message` ni `status`.
+   */
+  readonly fromMeta: boolean;
 
-  constructor(kind: MetaApiErrorKind, message: string, status?: number) {
+  constructor(kind: MetaApiErrorKind, message: string, status?: number, fromMeta = false) {
     super(message);
     this.name = "MetaApiError";
     this.kind = kind;
     this.status = status;
+    this.fromMeta = fromMeta;
   }
 }
 
@@ -50,36 +59,42 @@ interface MetaGraphErrorBody {
 function classifyMetaError(status: number, body: MetaGraphErrorBody | null): MetaApiError {
   const code = body?.error?.code;
   const message = body?.error?.message?.trim();
+  /** ¿Rechazó la petición la propia Graph API, o un intermediario por el camino? */
+  const fromMeta = Boolean(body?.error);
 
   if (status === 401 || code === 190) {
     return new MetaApiError(
       "invalid_token",
       "El token de acceso de Meta no es válido o ha expirado. Genera uno nuevo y actualiza META_ACCESS_TOKEN.",
-      status
+      status,
+      fromMeta
     );
   }
   if (status === 403 || code === 200 || code === 10) {
     return new MetaApiError(
       "insufficient_permissions",
       "El token no tiene permisos suficientes para esta operación (revisa los permisos ads_read / ads_management concedidos).",
-      status
+      status,
+      fromMeta
     );
   }
   if (status === 429 || code === 4 || code === 17 || code === 32) {
     return new MetaApiError(
       "rate_limited",
       "Se alcanzó el límite de solicitudes de Meta Graph API. Intenta de nuevo en unos minutos.",
-      status
+      status,
+      fromMeta
     );
   }
   if (status === 404) {
     return new MetaApiError(
       "not_found",
       "El recurso solicitado no existe o no es accesible con este token (revisa el ID de cuenta/campaña).",
-      status
+      status,
+      fromMeta
     );
   }
-  return new MetaApiError("unknown", message || `Meta Graph API respondió con estado ${status}.`, status);
+  return new MetaApiError("unknown", message || `Meta Graph API respondió con estado ${status}.`, status, fromMeta);
 }
 
 /**

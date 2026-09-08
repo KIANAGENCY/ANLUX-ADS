@@ -3,9 +3,9 @@
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { FiltersProvider, useFilters } from "@/components/providers/filters-provider";
-import { ErrorBanner } from "@/components/ui/error-banner";
+import { FiltersProvider } from "@/components/providers/filters-provider";
 import { AIDrawerProvider } from "@/components/ai/ai-drawer";
+import { MetaConnectionBanner } from "./meta-connection-banner";
 import { useAuthState } from "@/hooks/use-auth-state";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -71,13 +71,3 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Falla de la conexión con Meta (token ausente, inválido, sin permisos...).
- * Se muestra en todas las secciones porque sin cuentas no hay ningún dato
- * real que enseñar — y nunca se sustituye por datos simulados.
- */
-function MetaConnectionBanner() {
-  const { realAccountsError } = useFilters();
-  if (!realAccountsError) return null;
-  return <ErrorBanner message={`Meta no está disponible: ${realAccountsError}`} />;
-}

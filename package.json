@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:ai": "node scripts/test-ai-modes.mjs"
+    "test:ai": "node scripts/test-ai-modes.mjs",
+    "test:health": "node scripts/test-meta-health.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.121.0",

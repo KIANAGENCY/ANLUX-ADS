@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { isMetaApiConfigured } from "@/lib/meta/config";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isActiveProviderConfigured, resolveAIProvider } from "@/lib/ai/config";
+import { MetaHealth } from "@/components/settings/meta-health";
 
 /** Proveedor de IA activo. Si AI_PROVIDER es inválido se refleja como no configurado. */
 function activeAIProvider(): { label: string; envVars: string[] } {
@@ -42,6 +43,8 @@ const INTEGRATIONS = [
 export default function SettingsPage() {
   return (
     <div className="max-w-3xl space-y-6">
+      <MetaHealth />
+
       <Card>
         <CardHeader>
           <CardTitle>Estado de integraciones</CardTitle>
@@ -83,7 +86,14 @@ export default function SettingsPage() {
             viendo aquí como configurado.
           </p>
           <p>
-            El estado real de la conexión aparece en cada sección: si Meta rechaza el token, las páginas de
+            La comprobación de arriba sí verifica la conexión de verdad: pregunta a Meta si el token sigue
+            siendo válido, si el Business Manager configurado es accesible y qué cuentas publicitarias
+            alcanza. Distingue token vencido, permisos insuficientes, negocio inaccesible, cuenta sin asignar
+            y fallo temporal de Meta, porque cada uno se arregla en un sitio distinto. Es de solo lectura y
+            nunca muestra ni registra el token.
+          </p>
+          <p>
+            El estado real de la conexión aparece también en cada sección: si Meta rechaza el token, las páginas de
             Overview, Campañas, Conjuntos, Anuncios, Creativos y Alertas muestran el error devuelto por la API,
             sin sustituirlo por datos simulados.
           </p>
