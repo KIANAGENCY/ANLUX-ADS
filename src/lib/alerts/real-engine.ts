@@ -1,9 +1,11 @@
 import "server-only";
+import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
-import type { AlertSeverity, Campaign, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
+import type { AdSet, AlertSeverity, Campaign, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
+import { formatCurrency } from "@/lib/utils/format";
 import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
 
 let alertIdCounter = 0;
@@ -40,7 +42,8 @@ function applyCampaignRules(
   alerts: PerformanceAlert[],
   campaign: Pick<Campaign, "id" | "name" | "objective">,
   current: PerformanceMetrics,
-  previous: PerformanceMetrics
+  previous: PerformanceMetrics,
+  currency: string | null
 ) {
   if (previous.ctr > 0 && current.ctr > 0) {
     const ctrChange = ((current.ctr - previous.ctr) / previous.ctr) * 100;
@@ -76,7 +79,7 @@ function applyCampaignRules(
         alerts,
         "critical",
         "CPC disparado",
-        `El CPC de "${campaign.name}" subió ${cpcChange.toFixed(1)}% ($${previous.cpc.toFixed(2)} → $${current.cpc.toFixed(2)}).`,
+        `El CPC de "${campaign.name}" subió ${cpcChange.toFixed(1)}% (${formatCurrency(previous.cpc, currency)} → ${formatCurrency(current.cpc, currency)}).`,
         "campaign",
         campaign.name,
         "cpc",
@@ -96,12 +99,14 @@ function applyCampaignRules(
     }
   }
 
+  // El umbral existente se conserva deliberadamente para no cambiar la lógica
+  // de negocio en esta refactorización. Se interpreta en la moneda de la cuenta.
   if (current.spend > 5 && current.results === 0 && campaign.objective !== "BRAND_AWARENESS") {
     pushAlert(
       alerts,
       "critical",
       "Gasto sin resultados",
-      `"${campaign.name}" invirtió $${current.spend.toFixed(2)} en el periodo sin generar ningún resultado.`,
+      `"${campaign.name}" invirtió ${formatCurrency(current.spend, currency)} en el periodo sin generar ningún resultado.`,
       "campaign",
       campaign.name,
       "results",
@@ -124,7 +129,8 @@ function applyCampaignRules(
 /** Regla de negocio sobre el conjunto de campañas: costo por resultado muy por encima del promedio de cuenta. */
 function applyCostPerResultOutlierRule(
   alerts: PerformanceAlert[],
-  campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[]
+  campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[],
+  currency: string | null
 ) {
   const withResults = campaignMetrics.filter((c) => c.current.results > 0);
   if (withResults.length <= 1) return;
@@ -137,7 +143,7 @@ function applyCostPerResultOutlierRule(
         alerts,
         "warning",
         "Costo por resultado muy por encima del promedio",
-        `"${name}" tiene un costo por resultado de $${current.costPerResult.toFixed(2)}, ${timesAvg.toFixed(1)}x el promedio de la cuenta ($${account.costPerResult.toFixed(2)}).`,
+        `"${name}" tiene un costo por resultado de ${formatCurrency(current.costPerResult, currency)}, ${timesAvg.toFixed(1)}x el promedio de la cuenta (${formatCurrency(account.costPerResult, currency)}).`,
         "campaign",
         name,
         "costPerResult",
@@ -152,60 +158,38 @@ function sortBySeverity(alerts: PerformanceAlert[]): PerformanceAlert[] {
   return alerts.sort((a, b) => severityWeight[a.severity] - severityWeight[b.severity]);
 }
 
+export interface RealAlertEvaluationInput {
+  campaigns: Campaign[];
+  currentCampaignMetrics: Record<string, PerformanceMetrics>;
+  previousCampaignMetrics: Record<string, PerformanceMetrics>;
+  adSets: AdSet[];
+  adSetMetrics: Record<string, PerformanceMetrics>;
+  currency: string | null;
+}
+
 /**
- * Evalúa las reglas de negocio de performance (CTR, CPC, gasto sin
- * resultados, costo por resultado fuera de rango, frecuencia) exclusivamente
- * sobre datos obtenidos de Meta Marketing API (`lib/meta/real/`).
- * Server-only: nunca se importa desde un componente/hook cliente.
- *
- * Si Meta no devuelve campañas o ad sets, simplemente no hay alertas que
- * generar: la lista vuelve vacía y la UI muestra su estado vacío.
+ * Motor puro de alertas sobre datos ya obtenidos de Meta. Permite que la UI
+ * y el AI Analyst compartan exactamente las mismas reglas sin volver a llamar
+ * a Graph API ni duplicar consultas.
  */
-export async function generateRealAlerts(accountId: string, range: DateRange): Promise<PerformanceAlert[]> {
+export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): PerformanceAlert[] {
   const alerts: PerformanceAlert[] = [];
-  const previousRange = getPreviousPeriod(range);
-
-  const campaigns = await fetchRealCampaigns(accountId);
-  const activeCampaigns = campaigns.filter((c) => c.status !== "ARCHIVED");
-
-  if (activeCampaigns.length === 0) return [];
-
-  const [currentInsights, previousInsights] = await Promise.all([
-    fetchAggregatedInsightsByEntity(accountId, "campaign", range.from, range.to),
-    fetchAggregatedInsightsByEntity(accountId, "campaign", previousRange.from, previousRange.to),
-  ]);
-
+  const activeCampaigns = input.campaigns.filter((c) => c.status !== "ARCHIVED");
   const campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[] = [];
 
   for (const campaign of activeCampaigns) {
-    const currentRow = currentInsights.get(campaign.id);
-    const current = aggregateMetrics(
-      currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, range.from)] : []
-    );
-    const previousRow = previousInsights.get(campaign.id);
-    const previous = aggregateMetrics(
-      previousRow
-        ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
-        : []
-    );
+    const current = input.currentCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
+    const previous = input.previousCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
     campaignMetrics.push({ campaignId: campaign.id, name: campaign.name, current });
-    applyCampaignRules(alerts, campaign, current, previous);
+    applyCampaignRules(alerts, campaign, current, previous, input.currency);
   }
 
-  applyCostPerResultOutlierRule(alerts, campaignMetrics);
+  applyCostPerResultOutlierRule(alerts, campaignMetrics, input.currency);
 
-  const [adSets, adSetInsights] = await Promise.all([
-    fetchRealAdSets(accountId),
-    fetchAggregatedInsightsByEntity(accountId, "adset", range.from, range.to),
-  ]);
-
-  for (const adSet of adSets) {
+  for (const adSet of input.adSets) {
     if (adSet.status !== "ACTIVE") continue;
-    const row = adSetInsights.get(adSet.id);
-    if (!row) continue;
-    const metrics = aggregateMetrics([
-      mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, range.from),
-    ]);
+    const metrics = input.adSetMetrics[adSet.id];
+    if (!metrics) continue;
     if (metrics.frequency > 3) {
       pushAlert(
         alerts,
@@ -221,4 +205,64 @@ export async function generateRealAlerts(accountId: string, range: DateRange): P
   }
 
   return sortBySeverity(alerts);
+}
+
+/**
+ * Evalúa las reglas de negocio de performance exclusivamente sobre datos
+ * obtenidos de Meta Marketing API (`lib/meta/real/`). Server-only.
+ *
+ * Esta función conserva el endpoint de Alertas autónomo. El AI Analyst usa el
+ * motor puro `buildRealAlertsFromMetrics()` con datos que ya reunió, evitando
+ * repetir llamadas a Meta.
+ */
+export async function generateRealAlerts(accountId: string, range: DateRange): Promise<PerformanceAlert[]> {
+  const previousRange = getPreviousPeriod(range);
+
+  const [campaigns, accounts] = await Promise.all([fetchRealCampaigns(accountId), fetchAdAccounts()]);
+  const currency = accounts.find((account) => account.id === accountId)?.currency ?? null;
+  const activeCampaigns = campaigns.filter((c) => c.status !== "ARCHIVED");
+
+  if (activeCampaigns.length === 0) return [];
+
+  const [currentInsights, previousInsights, adSets, adSetInsights] = await Promise.all([
+    fetchAggregatedInsightsByEntity(accountId, "campaign", range.from, range.to),
+    fetchAggregatedInsightsByEntity(accountId, "campaign", previousRange.from, previousRange.to),
+    fetchRealAdSets(accountId),
+    fetchAggregatedInsightsByEntity(accountId, "adset", range.from, range.to),
+  ]);
+
+  const currentCampaignMetrics: Record<string, PerformanceMetrics> = {};
+  const previousCampaignMetrics: Record<string, PerformanceMetrics> = {};
+
+  for (const campaign of activeCampaigns) {
+    const currentRow = currentInsights.get(campaign.id);
+    currentCampaignMetrics[campaign.id] = aggregateMetrics(
+      currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, range.from)] : []
+    );
+
+    const previousRow = previousInsights.get(campaign.id);
+    previousCampaignMetrics[campaign.id] = aggregateMetrics(
+      previousRow
+        ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
+        : []
+    );
+  }
+
+  const adSetMetrics: Record<string, PerformanceMetrics> = {};
+  for (const adSet of adSets) {
+    const row = adSetInsights.get(adSet.id);
+    if (!row) continue;
+    adSetMetrics[adSet.id] = aggregateMetrics([
+      mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, range.from),
+    ]);
+  }
+
+  return buildRealAlertsFromMetrics({
+    campaigns: activeCampaigns,
+    currentCampaignMetrics,
+    previousCampaignMetrics,
+    adSets,
+    adSetMetrics,
+    currency,
+  });
 }
