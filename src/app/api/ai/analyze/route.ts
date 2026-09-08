@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
+import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
-import type { Ad, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
+import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
 
@@ -31,10 +32,12 @@ interface AnalyzeRequestBody {
 
 interface GatheredData {
   client: Client;
-  currency: string;
+  currency: string | null;
   campaigns: Campaign[];
+  adSets: AdSet[];
   ads: Ad[];
   campaignMetrics: Record<string, PerformanceMetrics>;
+  adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
@@ -42,13 +45,13 @@ interface GatheredData {
 
 const META_ACCOUNT_COLOR = "#1877F2";
 
-/** Campañas + anuncios + métricas del periodo de la cuenta, todo vía `lib/meta/real/`. */
+/** Campañas + conjuntos + anuncios + métricas del periodo, todo vía `lib/meta/real/`. */
 async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
 
   const [accounts, campaigns] = await Promise.all([fetchAdAccounts(), fetchRealCampaigns(accountId)]);
   const account = accounts.find((a) => a.id === accountId);
-  const currency = account?.currency ?? "USD";
+  const currency = account?.currency ?? null;
   const client: Client = {
     id: accountId,
     name: account?.name ?? accountId,
@@ -59,14 +62,16 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     adAccountId: accountId,
   };
 
-  // Sin campañas: no tiene sentido pedir insights ni anuncios — se corta aquí (ver ruta principal).
+  // Sin campañas: no tiene sentido pedir insights ni entidades inferiores.
   if (campaigns.length === 0) {
     return {
       client,
       currency,
       campaigns: [],
+      adSets: [],
       ads: [],
       campaignMetrics: {},
+      adSetMetrics: {},
       adMetrics: {},
       currentMetrics: aggregateMetrics([]),
       previousMetrics: aggregateMetrics([]),
@@ -97,24 +102,36 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   const currentMetrics = combineAccountMetrics(Object.values(campaignMetrics));
 
-  // Sin gasto ni impresiones en el rango: tampoco hay nada real que analizar (ver ruta principal).
+  // Sin gasto ni impresiones en el rango: tampoco hay nada real que analizar.
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
     return {
       client,
       currency,
       campaigns,
+      adSets: [],
       ads: [],
       campaignMetrics,
+      adSetMetrics: {},
       adMetrics: {},
       currentMetrics,
       previousMetrics: combineAccountMetrics(previousCampaignMetrics),
     };
   }
 
-  const [ads, adInsights] = await Promise.all([
+  const [adSets, adSetInsights, ads, adInsights] = await Promise.all([
+    fetchRealAdSets(accountId),
+    fetchAggregatedInsightsByEntity(accountId, "adset", dateRange.from, dateRange.to),
     fetchRealAds(accountId),
     fetchAggregatedInsightsByEntity(accountId, "ad", dateRange.from, dateRange.to),
   ]);
+
+  const adSetMetrics: Record<string, PerformanceMetrics> = {};
+  for (const adSet of adSets) {
+    const row = adSetInsights.get(adSet.id);
+    adSetMetrics[adSet.id] = aggregateMetrics(
+      row ? [mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, dateRange.from)] : []
+    );
+  }
 
   const adMetrics: Record<string, PerformanceMetrics> = {};
   for (const ad of ads) {
@@ -128,8 +145,10 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     client,
     currency,
     campaigns,
+    adSets,
     ads,
     campaignMetrics,
+    adSetMetrics,
     adMetrics,
     currentMetrics,
     previousMetrics: combineAccountMetrics(previousCampaignMetrics),
@@ -162,8 +181,8 @@ function noDataAnalysis(): AIAnalysis {
  *     proveedor recibe solo la pregunta, marcada como "sin datos de campaña".
  *     Funciona aunque META_ACCESS_TOKEN falte o esté vencido.
  *   - **performance** (analizar rendimiento): exige cuenta y periodo, y los
- *     valida antes de llamar a Meta o a la IA. Reúne campañas, anuncios y
- *     métricas exclusivamente de Meta Marketing API (`lib/meta/real/`).
+ *     valida antes de llamar a Meta o a la IA. Reúne campañas, conjuntos,
+ *     anuncios y métricas exclusivamente de Meta Marketing API (`lib/meta/real/`).
  *
  * El proveedor solo recibe métricas reales: no existe ninguna fuente
  * simulada. Si no hay campañas ni gasto/impresiones en el periodo, se
@@ -246,11 +265,12 @@ export async function POST(req: NextRequest) {
       currency: data.currency,
       dateRange,
       campaigns: data.campaigns,
-      adSets: [],
+      adSets: data.adSets,
       ads: data.ads,
       currentMetrics: data.currentMetrics,
       previousMetrics: data.previousMetrics,
       campaignMetrics: data.campaignMetrics,
+      adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
       question,
     });
