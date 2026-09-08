@@ -31,6 +31,7 @@ interface AnalyzeRequestBody {
 
 interface GatheredData {
   client: Client;
+  currency: string;
   campaigns: Campaign[];
   ads: Ad[];
   campaignMetrics: Record<string, PerformanceMetrics>;
@@ -47,6 +48,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   const [accounts, campaigns] = await Promise.all([fetchAdAccounts(), fetchRealCampaigns(accountId)]);
   const account = accounts.find((a) => a.id === accountId);
+  const currency = account?.currency ?? "USD";
   const client: Client = {
     id: accountId,
     name: account?.name ?? accountId,
@@ -61,6 +63,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
   if (campaigns.length === 0) {
     return {
       client,
+      currency,
       campaigns: [],
       ads: [],
       campaignMetrics: {},
@@ -98,6 +101,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
     return {
       client,
+      currency,
       campaigns,
       ads: [],
       campaignMetrics,
@@ -122,6 +126,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   return {
     client,
+    currency,
     campaigns,
     ads,
     campaignMetrics,
@@ -238,6 +243,7 @@ export async function POST(req: NextRequest) {
     const analysis = await getAIAnalystService().analyze({
       mode: "performance",
       client: data.client,
+      currency: data.currency,
       dateRange,
       campaigns: data.campaigns,
       adSets: [],
