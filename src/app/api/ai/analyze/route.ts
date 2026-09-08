@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
+import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
@@ -7,7 +8,7 @@ import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
-import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
+import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
 
@@ -41,6 +42,7 @@ interface GatheredData {
   adMetrics: Record<string, PerformanceMetrics>;
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
+  alerts: PerformanceAlert[];
 }
 
 const META_ACCOUNT_COLOR = "#1877F2";
@@ -75,6 +77,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       adMetrics: {},
       currentMetrics: aggregateMetrics([]),
       previousMetrics: aggregateMetrics([]),
+      alerts: [],
     };
   }
 
@@ -84,23 +87,22 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
   ]);
 
   const campaignMetrics: Record<string, PerformanceMetrics> = {};
-  const previousCampaignMetrics: PerformanceMetrics[] = [];
+  const previousCampaignMetrics: Record<string, PerformanceMetrics> = {};
   for (const campaign of campaigns) {
     const currentRow = currentInsights.get(campaign.id);
     campaignMetrics[campaign.id] = aggregateMetrics(
       currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, dateRange.from)] : []
     );
     const previousRow = previousInsights.get(campaign.id);
-    previousCampaignMetrics.push(
-      aggregateMetrics(
-        previousRow
-          ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
-          : []
-      )
+    previousCampaignMetrics[campaign.id] = aggregateMetrics(
+      previousRow
+        ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
+        : []
     );
   }
 
   const currentMetrics = combineAccountMetrics(Object.values(campaignMetrics));
+  const previousMetrics = combineAccountMetrics(Object.values(previousCampaignMetrics));
 
   // Sin gasto ni impresiones en el rango: tampoco hay nada real que analizar.
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
@@ -114,7 +116,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       adSetMetrics: {},
       adMetrics: {},
       currentMetrics,
-      previousMetrics: combineAccountMetrics(previousCampaignMetrics),
+      previousMetrics,
+      alerts: [],
     };
   }
 
@@ -141,6 +144,15 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
   }
 
+  const alerts = buildRealAlertsFromMetrics({
+    campaigns,
+    currentCampaignMetrics: campaignMetrics,
+    previousCampaignMetrics,
+    adSets,
+    adSetMetrics,
+    currency,
+  });
+
   return {
     client,
     currency,
@@ -151,7 +163,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     adSetMetrics,
     adMetrics,
     currentMetrics,
-    previousMetrics: combineAccountMetrics(previousCampaignMetrics),
+    previousMetrics,
+    alerts,
   };
 }
 
@@ -182,7 +195,8 @@ function noDataAnalysis(): AIAnalysis {
  *     Funciona aunque META_ACCESS_TOKEN falte o esté vencido.
  *   - **performance** (analizar rendimiento): exige cuenta y periodo, y los
  *     valida antes de llamar a Meta o a la IA. Reúne campañas, conjuntos,
- *     anuncios y métricas exclusivamente de Meta Marketing API (`lib/meta/real/`).
+ *     anuncios, métricas y alertas deterministas exclusivamente a partir de
+ *     Meta Marketing API (`lib/meta/real/`).
  *
  * El proveedor solo recibe métricas reales: no existe ninguna fuente
  * simulada. Si no hay campañas ni gasto/impresiones en el periodo, se
@@ -272,6 +286,7 @@ export async function POST(req: NextRequest) {
       campaignMetrics: data.campaignMetrics,
       adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
+      alerts: data.alerts,
       question,
     });
     return NextResponse.json(analysis);
