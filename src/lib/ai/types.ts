@@ -8,6 +8,8 @@ import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMet
 export interface AIPerformanceRequest {
   mode: "performance";
   client: Client;
+  /** Moneda real configurada en la cuenta publicitaria de Meta (p. ej. MXN, USD). */
+  currency: string;
   dateRange: DateRange;
   campaigns: Campaign[];
   adSets: AdSet[];
