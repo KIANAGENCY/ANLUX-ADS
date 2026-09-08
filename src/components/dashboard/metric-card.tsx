@@ -6,18 +6,24 @@ import { formatCurrency, formatDecimal, formatNumber, formatPercent, formatSigne
 import { isChangePositive, METRIC_LABELS } from "@/lib/utils/metrics";
 import { cn } from "@/lib/utils/cn";
 
-const METRIC_FORMATTERS: Record<MetricKey, (v: number) => string> = {
-  spend: (v) => formatCurrency(v),
-  reach: (v) => formatNumber(v),
-  impressions: (v) => formatNumber(v),
-  clicks: (v) => formatNumber(v),
-  results: (v) => formatNumber(v),
-  frequency: (v) => formatDecimal(v),
-  cpm: (v) => formatCurrency(v),
-  ctr: (v) => formatPercent(v),
-  cpc: (v) => formatCurrency(v),
-  costPerResult: (v) => formatCurrency(v),
-};
+function formatMetric(metric: MetricKey, value: number, currency: string | null): string {
+  switch (metric) {
+    case "spend":
+    case "cpm":
+    case "cpc":
+    case "costPerResult":
+      return formatCurrency(value, currency);
+    case "reach":
+    case "impressions":
+    case "clicks":
+    case "results":
+      return formatNumber(value);
+    case "frequency":
+      return formatDecimal(value);
+    case "ctr":
+      return formatPercent(value);
+  }
+}
 
 const METRIC_TOOLTIPS: Record<MetricKey, string> = {
   spend: "Total invertido en el periodo seleccionado.",
@@ -36,11 +42,13 @@ export function MetricCard({
   metric,
   value,
   changePercent,
+  currency,
   icon: Icon,
 }: {
   metric: MetricKey;
   value: number;
   changePercent: number | null;
+  currency: string | null;
   icon?: LucideIcon;
 }) {
   const positive = isChangePositive(metric, changePercent);
@@ -57,7 +65,7 @@ export function MetricCard({
       </div>
 
       <p className="mt-3 text-[26px] leading-none font-semibold tracking-tight tabular-nums text-foreground">
-        {METRIC_FORMATTERS[metric](value)}
+        {formatMetric(metric, value, currency)}
       </p>
 
       <div className="mt-2.5 flex items-center gap-1.5 text-[11px]">
