@@ -22,13 +22,13 @@ const AI_PROVIDER_INFO = activeAIProvider();
 const INTEGRATIONS = [
   {
     name: "Meta Marketing API",
-    description: "Origen de campañas, ad sets, anuncios y métricas (lectura, vía app/api/meta/*).",
+    description: "Origen de campañas, ad sets, anuncios y métricas (solo lectura, vía app/api/meta/*).",
     envVars: ["META_ACCESS_TOKEN"],
     configured: isMetaApiConfigured(),
   },
   {
-    name: "Supabase",
-    description: "Autenticación y persistencia de datos.",
+    name: "Supabase Auth",
+    description: "Autenticación real de acceso al panel. La persistencia histórica todavía no está habilitada.",
     envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
     configured: isSupabaseConfigured(),
   },
@@ -98,9 +98,9 @@ export default function SettingsPage() {
             sin sustituirlo por datos simulados.
           </p>
           <p>
-            ANLUX funciona exclusivamente con datos reales de Meta Marketing API: no existe modo demo ni
-            ningún conjunto de datos simulado. Si una cuenta no tiene actividad en el periodo seleccionado, las
-            secciones muestran su estado vacío en lugar de rellenarlo con información inventada.
+            ANLUX funciona exclusivamente con datos reales de Meta Marketing API: no existe modo demo de datos.
+            Si una cuenta no tiene actividad en el periodo seleccionado, las secciones muestran su estado vacío en
+            lugar de rellenarlo con información inventada. El acceso también exige una sesión real de Supabase.
           </p>
         </CardContent>
       </Card>
