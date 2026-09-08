@@ -10,6 +10,7 @@ import { AdSetsTable } from "@/components/adsets/adsets-table";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
+import { useFilters } from "@/components/providers/filters-provider";
 import { useCampaigns } from "@/hooks/use-campaigns";
 import { useAdSets } from "@/hooks/use-adsets";
 import { OBJECTIVE_LABELS } from "@/lib/utils/labels";
@@ -33,6 +34,7 @@ const SUMMARY_METRICS: MetricKey[] = ["spend", "results", "costPerResult", "ctr"
  */
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { currency } = useFilters();
   const { loading: campaignsLoading, campaigns, error: campaignsError } = useCampaigns();
   const { loading: adSetsLoading, adSets, error: adSetsError } = useAdSets();
 
@@ -76,7 +78,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <p className="text-sm text-muted-foreground">
               {OBJECTIVE_LABELS[campaign.objective]}
-              {campaign.dailyBudget !== null && <> · Presupuesto {formatCurrency(campaign.dailyBudget)}/día</>}
+              {campaign.dailyBudget !== null && <> · Presupuesto {formatCurrency(campaign.dailyBudget, currency)}/día</>}
               {campaign.startDate && <> · Iniciada el {formatDateLong(campaign.startDate)}</>}
             </p>
           </div>
@@ -90,6 +92,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                 // La comparación con el periodo anterior es a nivel de cuenta:
                 // no se infiere una variación por campaña que Meta no ha dado.
                 changePercent={null}
+                currency={currency}
               />
             ))}
           </div>
