@@ -1,16 +1,13 @@
 /**
- * Estado de configuración de Supabase.
+ * Estado de configuración de Supabase Auth.
  *
- * Mientras `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
- * no estén definidas en `.env.local`, la aplicación entera funciona en
- * "modo demo": el login acepta cualquier credencial y no hay persistencia
- * real de sesión. Esto permite navegar y evaluar el dashboard sin depender
- * de un proyecto de Supabase todavía.
+ * ANLUX no dispone de modo demo de autenticación: si estas variables faltan,
+ * las rutas protegidas permanecen cerradas y el login muestra un error de
+ * configuración. Esto evita sesiones locales simuladas.
  *
- * `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` es la nomenclatura actual de
- * Supabase para la clave pública del proyecto (sustituye a la antigua
- * "anon key" en la misma posición del SDK: sigue siendo segura para
- * exponerse en el cliente).
+ * `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` es la clave pública del proyecto y
+ * puede exponerse al navegador; la autorización real depende de Supabase Auth
+ * y de sus políticas, no de mantener esta clave en secreto.
  */
 export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 export const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
