@@ -5,14 +5,15 @@ import { useState, type FormEvent } from "react";
 import { QuickQuestions } from "@/components/ai/quick-questions";
 import { AssistantAnalysis, TypingIndicator, UserMessage } from "@/components/ai/chat-message";
 import { useAIDrawer } from "@/components/ai/ai-drawer";
+import { ModeSelector } from "@/components/ai/mode-selector";
 
 export default function AIAnalystPage() {
-  const { messages, loading, askQuestion } = useAIDrawer();
+  const { messages, loading, askQuestion, mode, setMode, accountSelected } = useAIDrawer();
   const [input, setInput] = useState("");
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    askQuestion(input);
+    askQuestion(input, mode);
     setInput("");
   }
 
@@ -30,7 +31,7 @@ export default function AIAnalystPage() {
               periodo seleccionado.
             </p>
           </div>
-          <QuickQuestions onSelect={askQuestion} disabled={loading} />
+          <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />
         </div>
       ) : (
         <div className="flex-1 space-y-5 overflow-y-auto pb-4">
@@ -38,7 +39,7 @@ export default function AIAnalystPage() {
             m.role === "user" ? (
               <UserMessage key={m.id} text={m.text!} />
             ) : (
-              <AssistantAnalysis key={m.id} analysis={m.analysis!} />
+              <AssistantAnalysis key={m.id} analysis={m.analysis!} mode={m.mode} />
             )
           )}
           {loading && <TypingIndicator />}
@@ -46,7 +47,8 @@ export default function AIAnalystPage() {
       )}
 
       <div className="space-y-3 border-t border-border-subtle pt-4">
-        {messages.length > 0 && <QuickQuestions onSelect={askQuestion} disabled={loading} />}
+        <ModeSelector value={mode} onChange={setMode} disabled={loading} accountSelected={accountSelected} />
+        {messages.length > 0 && <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             value={input}

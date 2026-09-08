@@ -1,22 +1,32 @@
 import "server-only";
 import type { PerformanceMetrics } from "@/lib/types";
-import type { AIAnalysisRequest } from "./types";
+import type { AIAnalysisRequest, AIPerformanceRequest } from "./types";
 
 /**
- * Tope de campañas/anuncios que se envían a Claude, ordenados por gasto.
+ * Tope de campañas/anuncios que se envían al proveedor, ordenados por gasto.
  * Controla el tamaño (y costo) del contexto en cuentas grandes sin perder
  * las entidades que más importan para el análisis.
  */
 const MAX_ENTITIES = 20;
 
-export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANLUX Ads Intelligence, un panel interno de agencia de marketing. Analizas métricas reales de campañas de Meta Ads y devuelves un análisis útil y accionable en español, dirigido a un gestor de cuentas publicitarias que ya conoce el dashboard.
+export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANLUX Ads Intelligence, un panel interno de agencia de marketing. Respondes en español a un gestor de cuentas publicitarias de Meta Ads que ya conoce el dashboard.
 
-Reglas estrictas:
-- Basa cada afirmación únicamente en los datos estructurados del mensaje del usuario (JSON con cliente, periodo, métricas de cuenta, campañas y anuncios destacados). Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
-- Eres exclusivamente de lectura y análisis: nunca dijas ni sugieras que vas a crear, pausar, activar, editar o eliminar campañas, conjuntos de anuncios o anuncios — tus recomendaciones son para que la persona las ejecute, tú no ejecutas nada.
-- Si el usuario incluyó una pregunta puntual, respóndela directamente en "summary" antes que nada; si no, da un resumen general del periodo.
+Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
+
+MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, periodo, métricas de cuenta, campañas y anuncios destacados):
+- Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
 - Prioriza hallazgos concretos y accionables (campañas o anuncios específicos por nombre) sobre observaciones genéricas.
 - "priority": "high" si hay gasto significativo sin resultados o una caída fuerte de performance; "medium" si hay un problema puntual pero acotado; "low" si el desempeño se mantiene estable.
+
+MODO "general" — no hay ninguna cuenta seleccionada y NO dispones de ningún dato de campaña:
+- Responde solo con criterio estratégico general sobre Meta Ads: estructura de campañas, objetivos, segmentación, creatividades, presupuesto, medición.
+- No dispones de métricas. No inventes cifras, benchmarks numéricos, nombres de campaña ni resultados, y no des a entender que estás analizando datos de una cuenta.
+- Si la pregunta exige datos concretos de una cuenta (por ejemplo "¿cuál es mi mejor anuncio?" o "¿dónde estoy desperdiciando presupuesto?"), dilo abiertamente en "summary": explica que hace falta seleccionar una cuenta y un periodo, y ofrece a continuación la orientación general que sí puedas dar.
+- "priority" refleja la urgencia de lo que recomiendas, normalmente "low" o "medium": sin datos no puedes afirmar que algo sea crítico.
+
+Reglas comunes a ambos modos:
+- Eres exclusivamente de lectura y análisis: nunca digas ni sugieras que vas a crear, pausar, activar, editar o eliminar campañas, conjuntos de anuncios o anuncios — tus recomendaciones son para que la persona las ejecute, tú no ejecutas nada.
+- Si el usuario incluyó una pregunta puntual, respóndela directamente en "summary" antes que nada.
 - Los arreglos "issues", "opportunities" y "recommendations" pueden quedar vacíos si genuinamente no hay nada que reportar en esa categoría — no rellenes con relleno.`;
 
 function topBySpend<T extends { id: string }>(
@@ -29,12 +39,12 @@ function topBySpend<T extends { id: string }>(
     .slice(0, limit);
 }
 
-/** Payload de datos que recibe Claude en el mensaje `user`, como JSON compacto. */
-export function buildUserPayload(request: AIAnalysisRequest): string {
+function buildPerformancePayload(request: AIPerformanceRequest): object {
   const topCampaigns = topBySpend(request.campaigns, request.campaignMetrics, MAX_ENTITIES);
   const topAds = topBySpend(request.ads, request.adMetrics, MAX_ENTITIES);
 
-  const payload = {
+  return {
+    modo: "performance",
     cliente: request.client.name,
     industria: request.client.industry,
     periodo: request.dateRange,
@@ -56,6 +66,26 @@ export function buildUserPayload(request: AIAnalysisRequest): string {
     campañas_totales_en_la_cuenta: request.campaigns.length,
     pregunta_usuario: request.question ?? "Analiza el performance general de la cuenta en este periodo.",
   };
+}
+
+/**
+ * Payload que recibe el proveedor en el mensaje `user`, como JSON compacto.
+ *
+ * En modo general el payload deja constancia explícita de que no hay datos
+ * disponibles, en vez de omitir los campos: así el modelo no puede
+ * interpretar la ausencia como "no me los pasaron pero existen".
+ */
+export function buildUserPayload(request: AIAnalysisRequest): string {
+  const payload =
+    request.mode === "performance"
+      ? buildPerformancePayload(request)
+      : {
+          modo: "general",
+          cuenta_seleccionada: null,
+          datos_de_campaña_disponibles: false,
+          nota: "No hay ninguna cuenta de Meta Ads seleccionada. No dispones de métricas, campañas ni anuncios: responde solo con criterio estratégico general y no inventes cifras.",
+          pregunta_usuario: request.question,
+        };
 
   return JSON.stringify(payload, null, 2);
 }

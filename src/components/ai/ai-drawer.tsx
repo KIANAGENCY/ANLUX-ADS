@@ -4,13 +4,20 @@ import { Send, Sparkles, X } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { QuickQuestions } from "./quick-questions";
 import { AssistantAnalysis, TypingIndicator, UserMessage } from "./chat-message";
-import { useAIAnalysis, type ChatEntry } from "./use-ai-analysis";
+import { useAIAnalysis, type AnalysisMode, type ChatEntry } from "./use-ai-analysis";
+import { ModeSelector } from "./mode-selector";
+import { useFilters } from "@/components/providers/filters-provider";
 import type { AIAnalysis } from "@/lib/types";
 
 interface AIAnalystContextValue {
   messages: ChatEntry[];
   loading: boolean;
-  askQuestion: (question: string) => void;
+  askQuestion: (question: string, mode: AnalysisMode) => void;
+  /** Modo de consulta seleccionado, compartido por la página y el drawer. */
+  mode: AnalysisMode;
+  setMode: (mode: AnalysisMode) => void;
+  /** Hay una cuenta de Meta seleccionada: requisito del modo rendimiento. */
+  accountSelected: boolean;
   /** Último análisis devuelto por `/api/ai/analyze`, o `null` si aún no se generó ninguno. */
   lastAnalysis: AIAnalysis | null;
   isOpen: boolean;
@@ -30,7 +37,14 @@ const AIAnalystContext = createContext<AIAnalystContextValue | null>(null);
  */
 export function AIDrawerProvider({ children }: { children: ReactNode }) {
   const { messages, loading, askQuestion, scrollRef } = useAIAnalysis();
+  const { clientId } = useFilters();
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<AnalysisMode>("general");
+
+  const accountSelected = Boolean(clientId);
+  // El modo rendimiento exige cuenta: si no la hay, la consulta estratégica es
+  // la única ejecutable. Se deriva en vez de sincronizarse con un efecto.
+  const mode: AnalysisMode = selectedMode === "performance" && !accountSelected ? "general" : selectedMode;
 
   const lastAnalysis = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -44,6 +58,9 @@ export function AIDrawerProvider({ children }: { children: ReactNode }) {
       messages,
       loading,
       askQuestion,
+      mode,
+      setMode: setSelectedMode,
+      accountSelected,
       lastAnalysis,
       isOpen,
       open: () => setIsOpen(true),
@@ -51,7 +68,7 @@ export function AIDrawerProvider({ children }: { children: ReactNode }) {
     }),
     // `askQuestion` se recrea en cada render del provider; el resto son los datos reales.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [messages, loading, lastAnalysis, isOpen]
+    [messages, loading, mode, accountSelected, lastAnalysis, isOpen]
   );
 
   return (
@@ -69,7 +86,7 @@ export function useAIDrawer(): AIAnalystContextValue {
 }
 
 function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | null> }) {
-  const { messages, loading, askQuestion, isOpen, close } = useAIDrawer();
+  const { messages, loading, askQuestion, mode, setMode, accountSelected, isOpen, close } = useAIDrawer();
   const [input, setInput] = useState("");
 
   useEffect(() => {
@@ -85,7 +102,7 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    askQuestion(input);
+    askQuestion(input, mode);
     setInput("");
   }
 
@@ -124,7 +141,7 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
                 Pregunta sobre el performance de tu cuenta. El análisis se genera a partir de las métricas del
                 periodo seleccionado.
               </p>
-              <QuickQuestions onSelect={askQuestion} disabled={loading} />
+              <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />
             </div>
           ) : (
             <>
@@ -132,7 +149,7 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
                 m.role === "user" ? (
                   <UserMessage key={m.id} text={m.text!} />
                 ) : (
-                  <AssistantAnalysis key={m.id} analysis={m.analysis!} />
+                  <AssistantAnalysis key={m.id} analysis={m.analysis!} mode={m.mode} />
                 )
               )}
               {loading && <TypingIndicator />}
@@ -142,7 +159,8 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
         </div>
 
         <div className="space-y-3 border-t border-border-subtle px-5 py-4">
-          {messages.length > 0 && <QuickQuestions onSelect={askQuestion} disabled={loading} />}
+          <ModeSelector value={mode} onChange={setMode} disabled={loading} accountSelected={accountSelected} />
+          {messages.length > 0 && <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               value={input}

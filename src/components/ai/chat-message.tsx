@@ -20,7 +20,7 @@ export function UserMessage({ text }: { text: string }) {
   );
 }
 
-export function AssistantAnalysis({ analysis }: { analysis: AIAnalysis }) {
+export function AssistantAnalysis({ analysis, mode }: { analysis: AIAnalysis; mode?: "general" | "performance" }) {
   return (
     <div className="flex gap-2.5">
       <div className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-accent-ai/30 bg-accent-ai/15">
@@ -31,6 +31,12 @@ export function AssistantAnalysis({ analysis }: { analysis: AIAnalysis }) {
           <span className="text-xs font-medium text-muted-foreground">AI Performance Analyst</span>
           <Badge variant={PRIORITY_CONFIG[analysis.priority].variant}>{PRIORITY_CONFIG[analysis.priority].label}</Badge>
         </div>
+
+        {mode === "general" && (
+          <p className="rounded-md border border-border-subtle bg-background/40 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground-2">
+            Respuesta estratégica general: no está basada en métricas de tu cuenta.
+          </p>
+        )}
 
         <p className="leading-relaxed text-foreground/90">{analysis.summary}</p>
 

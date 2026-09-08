@@ -10,9 +10,22 @@ import type { Ad, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } 
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
 
+/** Modos del AI Analyst. Los envía el frontend explícitamente; el servidor los valida. */
+const ANALYSIS_MODES = ["general", "performance"] as const;
+type AnalysisMode = (typeof ANALYSIS_MODES)[number];
+
+function isAnalysisMode(value: unknown): value is AnalysisMode {
+  return typeof value === "string" && (ANALYSIS_MODES as readonly string[]).includes(value);
+}
+
 interface AnalyzeRequestBody {
-  clientId: string;
-  dateRange: DateRange;
+  /**
+   * Modo explícito de la consulta. Es el contrato: el servidor no lo infiere
+   * de la presencia de otros campos ni del texto de la pregunta.
+   */
+  mode?: string;
+  clientId?: string;
+  dateRange?: DateRange;
   question?: string;
 }
 
@@ -133,14 +146,23 @@ function noDataAnalysis(): AIAnalysis {
 /**
  * Backend del "AI Performance Analyst".
  *
- * El frontend nunca llama a Anthropic directamente: envía aquí la cuenta, el
- * rango de fechas y (opcionalmente) una pregunta. Este endpoint reúne
- * campañas, anuncios y métricas exclusivamente de Meta Marketing API
- * (`lib/meta/real/`) y se los pasa a `getAIAnalystService()` (Claude).
+ * El frontend nunca llama al proveedor de IA directamente: envía aquí la
+ * cuenta (si hay alguna seleccionada), el rango de fechas y la pregunta.
  *
- * Claude solo recibe métricas reales: no existe ninguna fuente simulada. Si
- * no hay campañas ni gasto/impresiones en el periodo, se devuelve un estado
- * vacío explícito sin llamar a Anthropic en absoluto.
+ * El modo llega **explícito** en el cuerpo y se valida aquí: no se infiere de
+ * la presencia de otros campos ni del texto de la pregunta, así que la
+ * separación entre ambos es determinista.
+ *   - **general** (consulta estratégica): no se consulta Meta bajo ninguna
+ *     circunstancia, ni siquiera si el cuerpo trae cuenta o periodo. El
+ *     proveedor recibe solo la pregunta, marcada como "sin datos de campaña".
+ *     Funciona aunque META_ACCESS_TOKEN falte o esté vencido.
+ *   - **performance** (analizar rendimiento): exige cuenta y periodo, y los
+ *     valida antes de llamar a Meta o a la IA. Reúne campañas, anuncios y
+ *     métricas exclusivamente de Meta Marketing API (`lib/meta/real/`).
+ *
+ * El proveedor solo recibe métricas reales: no existe ninguna fuente
+ * simulada. Si no hay campañas ni gasto/impresiones en el periodo, se
+ * devuelve un estado vacío explícito sin llamar al proveedor en absoluto.
  */
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
@@ -150,14 +172,60 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const { clientId, dateRange, question } = body;
-  if (!clientId || !dateRange?.from || !dateRange?.to) {
-    return NextResponse.json({ error: "clientId y dateRange son obligatorios" }, { status: 400 });
+  const { mode, clientId, dateRange, question } = body;
+
+  if (!isAnalysisMode(mode)) {
+    return NextResponse.json(
+      { error: `El modo de consulta es obligatorio y debe ser uno de: ${ANALYSIS_MODES.join(", ")}.` },
+      { status: 400 }
+    );
+  }
+
+  // ── Modo estratégico ────────────────────────────────────────────────────
+  // Barrera dura: en este modo NO se consulta Meta bajo ninguna circunstancia,
+  // aunque el cuerpo traiga clientId o dateRange — se ignoran deliberadamente.
+  // Por eso funciona aunque META_ACCESS_TOKEN falte o esté vencido.
+  if (mode === "general") {
+    const generalQuestion = question?.trim();
+    if (!generalQuestion) {
+      return NextResponse.json(
+        { error: "Escribe una pregunta para la consulta estratégica." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const analysis = await getAIAnalystService().analyze({
+        mode: "general",
+        question: generalQuestion,
+      });
+      return NextResponse.json(analysis);
+    } catch (err) {
+      return aiErrorResponse(err);
+    }
+  }
+
+  // ── Modo rendimiento ────────────────────────────────────────────────────
+  // Cuenta y periodo son obligatorios, y se validan ANTES de llamar a Meta o
+  // a la IA: sin ellos no puede haber métricas reales, y devolver cualquier
+  // análisis daría la falsa impresión de estar basado en datos.
+  const accountId = clientId?.trim();
+  if (!accountId) {
+    return NextResponse.json(
+      { error: "Selecciona una cuenta de Meta para analizar su rendimiento." },
+      { status: 400 }
+    );
+  }
+  if (!dateRange?.from || !dateRange?.to) {
+    return NextResponse.json(
+      { error: "Selecciona un periodo para analizar el rendimiento de esta cuenta." },
+      { status: 400 }
+    );
   }
 
   let data: GatheredData;
   try {
-    data = await gatherAccountData(clientId, dateRange);
+    data = await gatherAccountData(accountId, dateRange);
   } catch (err) {
     return metaErrorResponse(err);
   }
@@ -168,6 +236,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const analysis = await getAIAnalystService().analyze({
+      mode: "performance",
       client: data.client,
       dateRange,
       campaigns: data.campaigns,
