@@ -2,6 +2,7 @@
 
 import { DollarSign, Eye, MonitorPlay, Gauge, MousePointerClick, Percent, Coins, Target, Repeat, Users } from "lucide-react";
 import { useAccountMetrics } from "@/hooks/use-account-metrics";
+import { useFilters } from "@/components/providers/filters-provider";
 import { MetricCard } from "./metric-card";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import type { MetricKey } from "@/lib/types";
@@ -25,6 +26,7 @@ const METRIC_ORDER: { key: MetricKey; icon: typeof DollarSign }[] = [
 
 export function MetricsGrid() {
   const { loading, comparison } = useAccountMetrics();
+  const { currency } = useFilters();
 
   if (loading || !comparison) {
     return (
@@ -44,6 +46,7 @@ export function MetricsGrid() {
           metric={key}
           value={comparison.current[key]}
           changePercent={comparison.changePercent[key]}
+          currency={currency}
           icon={icon}
         />
       ))}
