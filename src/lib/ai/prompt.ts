@@ -13,8 +13,9 @@ export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANL
 
 Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
 
-MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, periodo, métricas de cuenta, campañas y anuncios destacados):
+MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda, periodo, métricas de cuenta, campañas y anuncios destacados):
 - Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
+- Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta"; nunca asumas USD si la cuenta usa otra moneda.
 - Prioriza hallazgos concretos y accionables (campañas o anuncios específicos por nombre) sobre observaciones genéricas.
 - "priority": "high" si hay gasto significativo sin resultados o una caída fuerte de performance; "medium" si hay un problema puntual pero acotado; "low" si el desempeño se mantiene estable.
 
@@ -47,6 +48,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
     modo: "performance",
     cliente: request.client.name,
     industria: request.client.industry,
+    moneda_cuenta: request.currency,
     periodo: request.dateRange,
     metricas_cuenta_periodo_actual: request.currentMetrics,
     metricas_cuenta_periodo_anterior: request.previousMetrics,
