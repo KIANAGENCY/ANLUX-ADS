@@ -1,4 +1,4 @@
-import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
+import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 
 /**
  * Análisis de rendimiento sobre una cuenta concreta. Se construye en el
@@ -20,6 +20,8 @@ export interface AIPerformanceRequest {
   campaignMetrics: Record<string, PerformanceMetrics>;
   adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
+  /** Alertas deterministas calculadas por ANLUX sobre los mismos datos reales. */
+  alerts: PerformanceAlert[];
   /** Pregunta puntual del usuario en el chat, si la hay (modo libre vs "analiza todo"). */
   question?: string;
 }
