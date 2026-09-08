@@ -37,7 +37,7 @@ function pushAlert(
   });
 }
 
-/** Reglas de negocio sobre campañas: CTR, CPC, gasto sin resultados. */
+/** Reglas de negocio sobre campañas: CTR, CPC y gasto sin resultados cuando el objetivo es conocido. */
 function applyCampaignRules(
   alerts: PerformanceAlert[],
   campaign: Pick<Campaign, "id" | "name" | "objective">,
@@ -99,9 +99,15 @@ function applyCampaignRules(
     }
   }
 
-  // El umbral existente se conserva deliberadamente para no cambiar la lógica
-  // de negocio en esta refactorización. Se interpreta en la moneda de la cuenta.
-  if (current.spend > 5 && current.results === 0 && campaign.objective !== "BRAND_AWARENESS") {
+  // Con objetivo UNKNOWN no podemos saber qué action_type representa el resultado,
+  // así que una ausencia de "results" no demuestra que haya gasto sin resultado.
+  const canEvaluateResults = campaign.objective !== "UNKNOWN";
+  if (
+    canEvaluateResults &&
+    current.spend > 5 &&
+    current.results === 0 &&
+    campaign.objective !== "BRAND_AWARENESS"
+  ) {
     pushAlert(
       alerts,
       "critical",
@@ -112,7 +118,12 @@ function applyCampaignRules(
       "results",
       campaign.id
     );
-  } else if (current.spend > 5 && current.results === 0 && campaign.objective === "BRAND_AWARENESS") {
+  } else if (
+    canEvaluateResults &&
+    current.spend > 5 &&
+    current.results === 0 &&
+    campaign.objective === "BRAND_AWARENESS"
+  ) {
     pushAlert(
       alerts,
       "info",
