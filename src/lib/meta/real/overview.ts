@@ -10,13 +10,6 @@ import {
 import { getPrimaryResult, parseActionsArray, toNumber } from "./actions";
 import { aggregateMetrics } from "@/lib/utils/metrics";
 
-/**
- * Métricas diarias a nivel de cuenta para graficar evolución.
- *
- * Cada punto diario usa reach deduplicado por Meta dentro de ese día. Estas
- * filas NO deben sumarse para obtener el reach total de un rango de varios
- * días, porque la misma persona puede aparecer en varios días.
- */
 export async function fetchAccountDailyMetrics(
   adAccountId: string,
   since: string,
@@ -31,7 +24,7 @@ export async function fetchAccountDailyMetrics(
   const resultsByDate = new Map<string, number>();
   for (const row of campaignRows) {
     const date = row.date_start ?? since;
-    const objective = (row.campaign_id && campaignObjectives.get(row.campaign_id)) || "TRAFFIC";
+    const objective = (row.campaign_id && campaignObjectives.get(row.campaign_id)) || "UNKNOWN";
     const actions = parseActionsArray(row.actions);
     const result = getPrimaryResult(actions, objective) ?? 0;
     resultsByDate.set(date, (resultsByDate.get(date) ?? 0) + result);
@@ -52,13 +45,7 @@ export async function fetchAccountDailyMetrics(
   });
 }
 
-/**
- * KPIs exactos de cuenta para un rango completo.
- *
- * spend/impressions/reach/clicks proceden de un único insight `level=account`
- * agregado por Meta para todo el rango. `results` se suma por campaña después
- * de interpretar cada fila con el objetivo de su propia campaña.
- */
+/** KPIs exactos de cuenta para un rango completo. */
 export async function fetchAccountRangeMetrics(
   adAccountId: string,
   since: string,
@@ -74,13 +61,11 @@ export async function fetchAccountRangeMetrics(
 
   let results = 0;
   for (const [campaignId, row] of campaignRows) {
-    const objective = campaignObjectives.get(campaignId) ?? "TRAFFIC";
+    const objective = campaignObjectives.get(campaignId) ?? "UNKNOWN";
     const actions = parseActionsArray(row.actions);
     results += getPrimaryResult(actions, objective) ?? 0;
   }
 
-  // Una sola fila representa el rango completo, de modo que aggregateMetrics
-  // deriva frecuencia/CPM/CTR/CPC/CPR sin volver a sumar reach entre días.
   return aggregateMetrics([
     {
       date: accountRow.date_start ?? since,
