@@ -6,7 +6,7 @@ import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@
 import type { AdSet, AlertSeverity, Campaign, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { formatCurrency } from "@/lib/utils/format";
-import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
+import { aggregateMetrics } from "@/lib/utils/metrics";
 
 let alertIdCounter = 0;
 function nextId(): string {
@@ -126,7 +126,7 @@ function applyCampaignRules(
   }
 }
 
-/** Regla de negocio sobre el conjunto de campañas: costo por resultado muy por encima del promedio de cuenta. */
+/** Regla sobre costo por resultado. Solo usa gasto/resultados, ambas métricas aditivas. */
 function applyCostPerResultOutlierRule(
   alerts: PerformanceAlert[],
   campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[],
@@ -135,15 +135,24 @@ function applyCostPerResultOutlierRule(
   const withResults = campaignMetrics.filter((c) => c.current.results > 0);
   if (withResults.length <= 1) return;
 
-  const account = combineAccountMetrics(withResults.map((c) => c.current));
+  const totals = withResults.reduce(
+    (acc, item) => {
+      acc.spend += item.current.spend;
+      acc.results += item.current.results;
+      return acc;
+    },
+    { spend: 0, results: 0 }
+  );
+  const accountCostPerResult = totals.results > 0 ? totals.spend / totals.results : 0;
+
   for (const { campaignId, name, current } of withResults) {
-    if (account.costPerResult > 0 && current.costPerResult >= account.costPerResult * 1.6) {
-      const timesAvg = current.costPerResult / account.costPerResult;
+    if (accountCostPerResult > 0 && current.costPerResult >= accountCostPerResult * 1.6) {
+      const timesAvg = current.costPerResult / accountCostPerResult;
       pushAlert(
         alerts,
         "warning",
         "Costo por resultado muy por encima del promedio",
-        `"${name}" tiene un costo por resultado de ${formatCurrency(current.costPerResult, currency)}, ${timesAvg.toFixed(1)}x el promedio de la cuenta (${formatCurrency(account.costPerResult, currency)}).`,
+        `"${name}" tiene un costo por resultado de ${formatCurrency(current.costPerResult, currency)}, ${timesAvg.toFixed(1)}x el promedio de la cuenta (${formatCurrency(accountCostPerResult, currency)}).`,
         "campaign",
         name,
         "costPerResult",
@@ -167,11 +176,7 @@ export interface RealAlertEvaluationInput {
   currency: string | null;
 }
 
-/**
- * Motor puro de alertas sobre datos ya obtenidos de Meta. Permite que la UI
- * y el AI Analyst compartan exactamente las mismas reglas sin volver a llamar
- * a Graph API ni duplicar consultas.
- */
+/** Motor puro de alertas sobre datos ya obtenidos de Meta. */
 export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): PerformanceAlert[] {
   const alerts: PerformanceAlert[] = [];
   const activeCampaigns = input.campaigns.filter((c) => c.status !== "ARCHIVED");
@@ -208,12 +213,8 @@ export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): Per
 }
 
 /**
- * Evalúa las reglas de negocio de performance exclusivamente sobre datos
- * obtenidos de Meta Marketing API (`lib/meta/real/`). Server-only.
- *
- * Esta función conserva el endpoint de Alertas autónomo. El AI Analyst usa el
- * motor puro `buildRealAlertsFromMetrics()` con datos que ya reunió, evitando
- * repetir llamadas a Meta.
+ * Evalúa las reglas de negocio exclusivamente sobre datos obtenidos de Meta.
+ * El AI Analyst reutiliza el motor puro para evitar repetir llamadas a Graph API.
  */
 export async function generateRealAlerts(accountId: string, range: DateRange): Promise<PerformanceAlert[]> {
   const previousRange = getPreviousPeriod(range);
