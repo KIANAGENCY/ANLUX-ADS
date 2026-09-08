@@ -5,6 +5,14 @@ import type { AIAnalysis } from "@/lib/types";
 import type { AIAnalysisRequest, IAIAnalystService } from "./types";
 import { AIAnalysisSchema } from "./schema";
 import { AI_ANALYST_SYSTEM_PROMPT, buildUserPayload } from "./prompt";
+import { AIAnalystError } from "./errors";
+import { isAnthropicConfigured } from "./config";
+
+// Reexportados por compatibilidad: la taxonomía vive ahora en `errors.ts` y la
+// lectura de credenciales en `config.ts`, compartidas por todos los proveedores.
+export { AIAnalystError } from "./errors";
+export type { AIAnalystErrorKind } from "./errors";
+export { isAnthropicConfigured } from "./config";
 
 /**
  * Sonnet 5: para este caso de uso (análisis estructurado sobre datos ya
@@ -14,18 +22,6 @@ import { AI_ANALYST_SYSTEM_PROMPT, buildUserPayload } from "./prompt";
  */
 const MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 2000;
-
-export type AIAnalystErrorKind = "rate_limited" | "auth" | "connection" | "invalid_response" | "refusal" | "unknown";
-
-/** Error tipado para fallos al hablar con Anthropic — mismo patrón que `MetaApiError`. */
-export class AIAnalystError extends Error {
-  readonly kind: AIAnalystErrorKind;
-  constructor(kind: AIAnalystErrorKind, message: string) {
-    super(message);
-    this.name = "AIAnalystError";
-    this.kind = kind;
-  }
-}
 
 /**
  * Implementación real del AI Performance Analyst, respaldada por la API de
@@ -87,8 +83,18 @@ export class ClaudeAIAnalystService implements IAIAnalystService {
       );
     }
 
+    // `messages.parse` ya valida contra el schema, pero se revalida aquí para
+    // que ambos proveedores pasen exactamente por la misma comprobación final.
+    const parsed = AIAnalysisSchema.safeParse(response.parsed_output);
+    if (!parsed.success) {
+      throw new AIAnalystError(
+        "invalid_response",
+        "Claude devolvió una respuesta que no cumple el formato esperado. Intenta de nuevo."
+      );
+    }
+
     return {
-      ...response.parsed_output,
+      ...parsed.data,
       generatedAt: new Date().toISOString(),
     };
   }
@@ -116,8 +122,4 @@ function translateAnthropicError(err: unknown): AIAnalystError {
   }
   console.error("[ai] error inesperado llamando a Claude:", err instanceof Error ? err.message : "desconocido");
   return new AIAnalystError("unknown", "No se pudo generar el análisis. Intenta de nuevo.");
-}
-
-export function isAnthropicConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
 }

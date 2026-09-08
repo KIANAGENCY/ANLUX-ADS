@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { AIAnalystError, type AIAnalystErrorKind } from "./claude-service";
+import { AIAnalystError, type AIAnalystErrorKind } from "./errors";
 
 const STATUS_BY_KIND: Record<AIAnalystErrorKind, number> = {
   rate_limited: 429,
@@ -8,6 +8,9 @@ const STATUS_BY_KIND: Record<AIAnalystErrorKind, number> = {
   connection: 502,
   invalid_response: 502,
   refusal: 422,
+  // Fallo de configuración del servidor (p. ej. AI_PROVIDER con un valor no
+  // reconocido): la integración no está disponible, igual que sin credencial.
+  configuration: 503,
   unknown: 500,
 };
 

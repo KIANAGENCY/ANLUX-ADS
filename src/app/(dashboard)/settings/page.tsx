@@ -3,7 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { isMetaApiConfigured } from "@/lib/meta/config";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { isAnthropicConfigured } from "@/lib/ai/claude-service";
+import { isActiveProviderConfigured, resolveAIProvider } from "@/lib/ai/config";
+
+/** Proveedor de IA activo. Si AI_PROVIDER es inválido se refleja como no configurado. */
+function activeAIProvider(): { label: string; envVars: string[] } {
+  try {
+    return resolveAIProvider() === "gemini"
+      ? { label: "Google Gemini", envVars: ["AI_PROVIDER", "GEMINI_API_KEY"] }
+      : { label: "Anthropic Claude", envVars: ["ANTHROPIC_API_KEY"] };
+  } catch {
+    return { label: "Proveedor de IA (configuración inválida)", envVars: ["AI_PROVIDER"] };
+  }
+}
+
+const AI_PROVIDER_INFO = activeAIProvider();
 
 const INTEGRATIONS = [
   {
@@ -19,10 +32,10 @@ const INTEGRATIONS = [
     configured: isSupabaseConfigured(),
   },
   {
-    name: "Anthropic Claude",
-    description: "Motor del AI Performance Analyst.",
-    envVars: ["ANTHROPIC_API_KEY"],
-    configured: isAnthropicConfigured(),
+    name: AI_PROVIDER_INFO.label,
+    description: "Motor del AI Performance Analyst. El proveedor se elige con AI_PROVIDER.",
+    envVars: AI_PROVIDER_INFO.envVars,
+    configured: isActiveProviderConfigured(),
   },
 ];
 
