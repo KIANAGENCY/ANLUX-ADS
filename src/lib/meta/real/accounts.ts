@@ -21,7 +21,7 @@ function mapAccounts(res: AdAccountsResponse): MetaAdAccountSummary[] {
     id: a.id,
     name: a.name?.trim() || a.id,
     accountStatus: a.account_status ?? 0,
-    currency: a.currency ?? "USD",
+    currency: a.currency?.trim() || null,
   }));
 }
 
