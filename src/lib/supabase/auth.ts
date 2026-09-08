@@ -6,20 +6,12 @@ import { isSupabaseConfigured } from "./config";
 export interface AuthResult {
   success: boolean;
   error?: string;
-  /** `true` cuando la sesión se simuló localmente por no haber Supabase configurado. */
-  demo?: boolean;
 }
 
-const DEMO_SESSION_KEY = "anlux_demo_session";
-
 /**
- * Inicia sesión con email/contraseña.
- *
- * - Si Supabase está configurado, usa `signInWithPassword` real.
- * - Si no, entra en "modo demo": acepta cualquier email/contraseña con
- *   formato válido y guarda una sesión simulada en `localStorage`, para que
- *   el resto de la app (que solo necesita saber "hay usuario / no hay
- *   usuario") funcione igual en ambos casos.
+ * Inicia sesión exclusivamente contra Supabase Auth real.
+ * Si Supabase no está configurado, falla de forma explícita: ANLUX nunca crea
+ * sesiones locales simuladas ni acepta credenciales de prueba.
  */
 export async function signInWithPassword(email: string, password: string): Promise<AuthResult> {
   if (!email || !password) {
@@ -27,16 +19,10 @@ export async function signInWithPassword(email: string, password: string): Promi
   }
 
   if (!isSupabaseConfigured()) {
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      return { success: false, error: "Introduce un email válido." };
-    }
-    if (password.length < 4) {
-      return { success: false, error: "La contraseña debe tener al menos 4 caracteres." };
-    }
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ email }));
-    }
-    return { success: true, demo: true };
+    return {
+      success: false,
+      error: "La autenticación de Supabase no está configurada. Revisa las variables de entorno del proyecto.",
+    };
   }
 
   const supabase = getSupabaseBrowserClient();
@@ -51,12 +37,7 @@ export async function signInWithPassword(email: string, password: string): Promi
   return { success: true };
 }
 
-/**
- * Supabase Auth devuelve sus mensajes de error en inglés. Traducimos los
- * casos más comunes para que el login siempre muestre un error claro en
- * español; el resto cae en un mensaje genérico (nunca se expone el mensaje
- * crudo del proveedor).
- */
+/** Traduce los errores comunes de Supabase Auth sin exponer mensajes crudos. */
 function translateAuthError(message: string): string {
   const normalized = message.toLowerCase();
 
@@ -84,16 +65,7 @@ function translateAuthError(message: string): string {
 }
 
 export async function signOut(): Promise<void> {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(DEMO_SESSION_KEY);
-  }
-  if (isSupabaseConfigured()) {
-    const supabase = getSupabaseBrowserClient();
-    await supabase?.auth.signOut();
-  }
-}
-
-export function hasDemoSession(): boolean {
-  if (typeof window === "undefined") return false;
-  return Boolean(window.localStorage.getItem(DEMO_SESSION_KEY));
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseBrowserClient();
+  await supabase?.auth.signOut();
 }
