@@ -1,24 +1,21 @@
 import "server-only";
-import type { DailyMetrics } from "@/lib/types";
+import type { DailyMetrics, PerformanceMetrics } from "@/lib/types";
 import { fetchCampaignObjectives } from "./campaigns";
-import { fetchAccountDailyInsights, fetchCampaignDailyInsights } from "./insights";
+import {
+  fetchAccountAggregatedInsight,
+  fetchAccountDailyInsights,
+  fetchAggregatedInsightsByEntity,
+  fetchCampaignDailyInsights,
+} from "./insights";
 import { getPrimaryResult, parseActionsArray, toNumber } from "./actions";
+import { aggregateMetrics } from "@/lib/utils/metrics";
 
 /**
- * Métricas diarias a nivel de cuenta para el rango dado.
+ * Métricas diarias a nivel de cuenta para graficar evolución.
  *
- * `spend`/`impressions`/`reach`/`clicks` se toman directamente del insight a
- * `level=account` (Meta ya los calcula deduplicados a nivel de cuenta, más
- * preciso que sumar cada campaña a mano).
- *
- * `results` es la excepción: a nivel de cuenta no existe un único "objetivo"
- * que indique qué `action_type` cuenta como resultado, y las campañas de la
- * cuenta pueden tener objetivos distintos entre sí. Sumar todos los
- * `action_type` sin distinción mezclaría leads con clics con mensajes — un
- * número sin significado. En su lugar, se piden también los insights diarios
- * a `level=campaign`, se interpreta el resultado de cada campaña con SU
- * PROPIO objetivo (`getPrimaryResult`), y se suman esos resultados ya
- * correctamente interpretados por día.
+ * Cada punto diario usa reach deduplicado por Meta dentro de ese día. Estas
+ * filas NO deben sumarse para obtener el reach total de un rango de varios
+ * días, porque la misma persona puede aparecer en varios días.
  */
 export async function fetchAccountDailyMetrics(
   adAccountId: string,
@@ -53,4 +50,47 @@ export async function fetchAccountDailyMetrics(
       results: resultsByDate.get(date) ?? 0,
     };
   });
+}
+
+/**
+ * KPIs exactos de cuenta para un rango completo.
+ *
+ * spend/impressions/reach/clicks proceden de un único insight `level=account`
+ * agregado por Meta para todo el rango. `results` se suma por campaña después
+ * de interpretar cada fila con el objetivo de su propia campaña.
+ */
+export async function fetchAccountRangeMetrics(
+  adAccountId: string,
+  since: string,
+  until: string
+): Promise<PerformanceMetrics> {
+  const [accountRow, campaignObjectives, campaignRows] = await Promise.all([
+    fetchAccountAggregatedInsight(adAccountId, since, until),
+    fetchCampaignObjectives(adAccountId),
+    fetchAggregatedInsightsByEntity(adAccountId, "campaign", since, until),
+  ]);
+
+  if (!accountRow) return aggregateMetrics([]);
+
+  let results = 0;
+  for (const [campaignId, row] of campaignRows) {
+    const objective = campaignObjectives.get(campaignId) ?? "TRAFFIC";
+    const actions = parseActionsArray(row.actions);
+    results += getPrimaryResult(actions, objective) ?? 0;
+  }
+
+  // Una sola fila representa el rango completo, de modo que aggregateMetrics
+  // deriva frecuencia/CPM/CTR/CPC/CPR sin volver a sumar reach entre días.
+  return aggregateMetrics([
+    {
+      date: accountRow.date_start ?? since,
+      entityId: adAccountId,
+      entityType: "account",
+      spend: toNumber(accountRow.spend),
+      impressions: toNumber(accountRow.impressions),
+      reach: toNumber(accountRow.reach),
+      clicks: toNumber(accountRow.clicks),
+      results,
+    },
+  ]);
 }
