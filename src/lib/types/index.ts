@@ -43,7 +43,8 @@ export interface MetaAdAccountSummary {
   id: string; // "act_XXXXXXXXXX"
   name: string;
   accountStatus: number;
-  currency: string;
+  /** Código ISO real devuelto por Meta; null si el proveedor lo omite. */
+  currency: string | null;
 }
 
 // ---------------------------------------------------------------------------
