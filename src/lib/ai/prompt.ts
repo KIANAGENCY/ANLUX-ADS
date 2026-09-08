@@ -3,7 +3,7 @@ import type { PerformanceMetrics } from "@/lib/types";
 import type { AIAnalysisRequest, AIPerformanceRequest } from "./types";
 
 /**
- * Tope de campañas/anuncios que se envían al proveedor, ordenados por gasto.
+ * Tope de entidades que se envían al proveedor, ordenadas por gasto.
  * Controla el tamaño (y costo) del contexto en cuentas grandes sin perder
  * las entidades que más importan para el análisis.
  */
@@ -13,10 +13,10 @@ export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANL
 
 Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
 
-MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda, periodo, métricas de cuenta, campañas y anuncios destacados):
+MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios y anuncios destacados):
 - Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
-- Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta"; nunca asumas USD si la cuenta usa otra moneda.
-- Prioriza hallazgos concretos y accionables (campañas o anuncios específicos por nombre) sobre observaciones genéricas.
+- Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta". Si "moneda_cuenta" es null, no asumas ninguna moneda ni presentes un símbolo monetario inventado.
+- Prioriza hallazgos concretos y accionables (campañas, conjuntos de anuncios o anuncios específicos por nombre) sobre observaciones genéricas.
 - "priority": "high" si hay gasto significativo sin resultados o una caída fuerte de performance; "medium" si hay un problema puntual pero acotado; "low" si el desempeño se mantiene estable.
 
 MODO "general" — no hay ninguna cuenta seleccionada y NO dispones de ningún dato de campaña:
@@ -42,6 +42,7 @@ function topBySpend<T extends { id: string }>(
 
 function buildPerformancePayload(request: AIPerformanceRequest): object {
   const topCampaigns = topBySpend(request.campaigns, request.campaignMetrics, MAX_ENTITIES);
+  const topAdSets = topBySpend(request.adSets, request.adSetMetrics, MAX_ENTITIES);
   const topAds = topBySpend(request.ads, request.adMetrics, MAX_ENTITIES);
 
   return {
@@ -59,6 +60,14 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       objetivo: c.objective,
       metricas: request.campaignMetrics[c.id],
     })),
+    conjuntos_de_anuncios_destacados: topAdSets.map((a) => ({
+      id: a.id,
+      nombre: a.name,
+      campaña_id: a.campaignId,
+      estado: a.status,
+      objetivo_optimizacion: a.optimizationGoal,
+      metricas: request.adSetMetrics[a.id],
+    })),
     anuncios_destacados: topAds.map((a) => ({
       id: a.id,
       nombre: a.name,
@@ -66,6 +75,8 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       metricas: request.adMetrics[a.id],
     })),
     campañas_totales_en_la_cuenta: request.campaigns.length,
+    conjuntos_de_anuncios_totales_en_la_cuenta: request.adSets.length,
+    anuncios_totales_en_la_cuenta: request.ads.length,
     pregunta_usuario: request.question ?? "Analiza el performance general de la cuenta en este periodo.",
   };
 }
