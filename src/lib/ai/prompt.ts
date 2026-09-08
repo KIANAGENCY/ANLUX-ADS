@@ -13,9 +13,10 @@ export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANL
 
 Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
 
-MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios y anuncios destacados):
+MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios, anuncios destacados y alertas deterministas de ANLUX):
 - Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
 - Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta". Si "moneda_cuenta" es null, no asumas ninguna moneda ni presentes un símbolo monetario inventado.
+- Las "alertas_anlux" son hallazgos calculados por reglas deterministas sobre los mismos datos reales. Úsalas como evidencia prioritaria, pero no inventes alertas adicionales como si las hubiera calculado el sistema.
 - Prioriza hallazgos concretos y accionables (campañas, conjuntos de anuncios o anuncios específicos por nombre) sobre observaciones genéricas.
 - "priority": "high" si hay gasto significativo sin resultados o una caída fuerte de performance; "medium" si hay un problema puntual pero acotado; "low" si el desempeño se mantiene estable.
 
@@ -53,11 +54,21 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
     periodo: request.dateRange,
     metricas_cuenta_periodo_actual: request.currentMetrics,
     metricas_cuenta_periodo_anterior: request.previousMetrics,
+    alertas_anlux: request.alerts.map((alert) => ({
+      severidad: alert.severity,
+      titulo: alert.title,
+      descripcion: alert.description,
+      tipo_entidad: alert.entityType,
+      entidad_id: alert.entityId ?? null,
+      entidad_nombre: alert.entityName ?? null,
+      metrica: alert.metric ?? null,
+    })),
     campañas: topCampaigns.map((c) => ({
       id: c.id,
       nombre: c.name,
       estado: c.status,
       objetivo: c.objective,
+      fecha_inicio: c.startDate ?? null,
       metricas: request.campaignMetrics[c.id],
     })),
     conjuntos_de_anuncios_destacados: topAdSets.map((a) => ({
@@ -66,6 +77,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       campaña_id: a.campaignId,
       estado: a.status,
       objetivo_optimizacion: a.optimizationGoal,
+      fecha_inicio: a.startDate ?? null,
       metricas: request.adSetMetrics[a.id],
     })),
     anuncios_destacados: topAds.map((a) => ({
