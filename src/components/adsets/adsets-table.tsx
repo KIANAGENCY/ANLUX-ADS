@@ -4,6 +4,7 @@ import { Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useFilters } from "@/components/providers/filters-provider";
 import type { AdSetWithMetrics } from "@/hooks/use-adsets";
 import { formatCurrency, formatNumber } from "@/lib/utils/format";
 
@@ -16,6 +17,8 @@ export function AdSetsTable({
   loading: boolean;
   showCampaignColumn?: boolean;
 }) {
+  const { currency } = useFilters();
+
   const columns: DataTableColumn<AdSetWithMetrics>[] = [
     {
       key: "name",
@@ -46,7 +49,7 @@ export function AdSetsTable({
       label: "Presupuesto/día",
       align: "right",
       sortValue: (a) => a.dailyBudget ?? -1,
-      render: (a) => (a.dailyBudget !== null ? formatCurrency(a.dailyBudget) : "—"),
+      render: (a) => (a.dailyBudget !== null ? formatCurrency(a.dailyBudget, currency) : "—"),
     },
     {
       key: "audience",
@@ -59,14 +62,14 @@ export function AdSetsTable({
       label: "Gasto",
       align: "right",
       sortValue: (a) => a.metrics.spend,
-      render: (a) => formatCurrency(a.metrics.spend),
+      render: (a) => formatCurrency(a.metrics.spend, currency),
     },
     {
       key: "cpm",
       label: "CPM",
       align: "right",
       sortValue: (a) => a.metrics.cpm,
-      render: (a) => formatCurrency(a.metrics.cpm),
+      render: (a) => formatCurrency(a.metrics.cpm, currency),
     },
     {
       key: "ctr",
@@ -80,7 +83,7 @@ export function AdSetsTable({
       label: "CPC",
       align: "right",
       sortValue: (a) => a.metrics.cpc,
-      render: (a) => formatCurrency(a.metrics.cpc),
+      render: (a) => formatCurrency(a.metrics.cpc, currency),
     },
     {
       key: "results",
@@ -94,7 +97,7 @@ export function AdSetsTable({
       label: "Costo/resultado",
       align: "right",
       sortValue: (a) => a.metrics.costPerResult,
-      render: (a) => (a.metrics.results > 0 ? formatCurrency(a.metrics.costPerResult) : "—"),
+      render: (a) => (a.metrics.results > 0 ? formatCurrency(a.metrics.costPerResult, currency) : "—"),
     },
   ];
 
