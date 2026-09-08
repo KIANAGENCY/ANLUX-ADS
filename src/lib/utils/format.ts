@@ -4,7 +4,13 @@ const decimalFormatter = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
 
-export function formatCurrency(value: number, currency = "USD"): string {
+/**
+ * Formatea dinero únicamente cuando conocemos la moneda real de la cuenta.
+ * Si Meta no la devolvió, muestra el importe sin símbolo en vez de inventar USD.
+ */
+export function formatCurrency(value: number, currency?: string | null): string {
+  if (!currency) return decimalFormatter.format(value);
+
   return new Intl.NumberFormat("es-ES", {
     style: "currency",
     currency,
