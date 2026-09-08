@@ -11,15 +11,22 @@ interface RawCampaign {
   objective?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+  start_time?: string;
 }
 
 interface CampaignsResponse {
   data: RawCampaign[];
 }
 
+function toDateOnly(value?: string): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+  return match?.[0];
+}
+
 export async function fetchRealCampaigns(adAccountId: string): Promise<Campaign[]> {
   const res = await metaGraphGet<CampaignsResponse>(`/${adAccountId}/campaigns`, {
-    fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget",
+    fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time",
     limit: 500,
   });
 
@@ -33,6 +40,7 @@ export async function fetchRealCampaigns(adAccountId: string): Promise<Campaign[
     rawObjective: c.objective,
     dailyBudget: minorUnitsToAmount(c.daily_budget),
     lifetimeBudget: minorUnitsToAmount(c.lifetime_budget),
+    startDate: toDateOnly(c.start_time),
   }));
 }
 

@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as Rechart
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useFilters } from "@/components/providers/filters-provider";
 import { LineChart as LineChartIcon } from "lucide-react";
 import type { DailyMetrics } from "@/lib/types";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
@@ -33,21 +34,22 @@ function computeValue(row: DailyMetrics, metric: ChartMetric): number {
   }
 }
 
-function formatValue(metric: ChartMetric, value: number): string {
+function formatValue(metric: ChartMetric, value: number, currency: string | null): string {
   switch (metric) {
     case "spend":
-      return formatCurrency(value);
+      return formatCurrency(value, currency);
     case "results":
       return formatNumber(value);
     case "ctr":
       return formatPercent(value);
     case "cpc":
-      return formatCurrency(value);
+      return formatCurrency(value, currency);
   }
 }
 
 export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; loading: boolean }) {
   const [metric, setMetric] = useState<ChartMetric>("spend");
+  const { currency } = useFilters();
 
   const data = useMemo(
     () =>
@@ -107,8 +109,10 @@ export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; load
                 tick={{ fill: "#475569", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
-                width={48}
-                tickFormatter={(v) => (metric === "spend" || metric === "cpc" ? `$${v}` : String(v))}
+                width={64}
+                tickFormatter={(v) =>
+                  metric === "spend" || metric === "cpc" ? formatCurrency(Number(v), currency) : String(v)
+                }
               />
               <RechartsTooltip
                 cursor={{ stroke: "#2C3A4F" }}
@@ -120,7 +124,7 @@ export function PerformanceChart({ rows, loading }: { rows: DailyMetrics[]; load
                 }}
                 labelFormatter={(label) => formatDateShort(String(label))}
                 formatter={(value) => [
-                  formatValue(metric, Number(value)),
+                  formatValue(metric, Number(value), currency),
                   METRIC_OPTIONS.find((o) => o.key === metric)?.label,
                 ]}
               />

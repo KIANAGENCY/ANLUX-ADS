@@ -2,9 +2,8 @@
 -- ANLUX Ads Intelligence — esquema futuro de Supabase (referencia)
 -- =============================================================================
 -- Este archivo es SOLO documentación: no se ejecuta automáticamente en
--- ningún sitio. Cuando conectemos Supabase de verdad, estas sentencias se
--- convertirán en migraciones reales (p. ej. con la Supabase CLI en
--- `supabase/migrations/`). Ninguna migración aquí es destructiva.
+-- ningún sitio. Cuando se habilite persistencia, estas sentencias deberán
+-- convertirse en migraciones revisadas antes de aplicarse a producción.
 --
 -- Filosofía: `campaign_snapshots` / `adset_snapshots` / `ad_snapshots`
 -- guardan una fila por entidad y día (igual que `DailyMetrics` en
@@ -21,7 +20,7 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
--- Clientes de la agencia (Orthobasic, Hotel Expert, ...).
+-- Clientes de la agencia.
 create table if not exists public.clients (
   id text primary key,
   name text not null,
@@ -32,12 +31,14 @@ create table if not exists public.clients (
 );
 
 -- Cuentas publicitarias de Meta asociadas a cada cliente.
+-- La moneda NO tiene un default inventado: debe persistirse únicamente cuando
+-- Meta la haya devuelto para esa cuenta.
 create table if not exists public.meta_ad_accounts (
   id text primary key,
   client_id text not null references public.clients (id) on delete cascade,
   meta_account_id text not null,
-  currency text not null default 'USD',
-  timezone text not null default 'UTC',
+  currency text,
+  timezone text,
   created_at timestamptz not null default now()
 );
 
@@ -51,7 +52,7 @@ create table if not exists public.campaign_snapshots (
   impressions bigint not null default 0,
   reach bigint not null default 0,
   clicks bigint not null default 0,
-  results bigint not null default 0,
+  results numeric not null default 0,
   created_at timestamptz not null default now(),
   unique (campaign_id, date)
 );
@@ -66,7 +67,7 @@ create table if not exists public.adset_snapshots (
   impressions bigint not null default 0,
   reach bigint not null default 0,
   clicks bigint not null default 0,
-  results bigint not null default 0,
+  results numeric not null default 0,
   created_at timestamptz not null default now(),
   unique (adset_id, date)
 );
@@ -81,12 +82,12 @@ create table if not exists public.ad_snapshots (
   impressions bigint not null default 0,
   reach bigint not null default 0,
   clicks bigint not null default 0,
-  results bigint not null default 0,
+  results numeric not null default 0,
   created_at timestamptz not null default now(),
   unique (ad_id, date)
 );
 
--- Historial de análisis generados por el AI Performance Analyst (mock hoy, Claude a futuro).
+-- Historial de análisis generados por el AI Performance Analyst.
 create table if not exists public.ai_analyses (
   id bigint generated always as identity primary key,
   client_id text not null references public.clients (id) on delete cascade,
@@ -99,10 +100,11 @@ create table if not exists public.ai_analyses (
   opportunities jsonb not null default '[]',
   recommendations jsonb not null default '[]',
   priority text not null default 'low', -- 'low' | 'medium' | 'high'
+  provider text,
   created_at timestamptz not null default now()
 );
 
--- Row Level Security: a activar cuando haya más de un usuario por cliente.
+-- Row Level Security: definir y probar antes de activar persistencia real.
 -- alter table public.clients enable row level security;
 -- alter table public.campaign_snapshots enable row level security;
 -- -- ... políticas por definir según el modelo de permisos de la agencia.

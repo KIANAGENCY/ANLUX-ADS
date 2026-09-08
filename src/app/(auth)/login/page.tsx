@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const authConfigured = isSupabaseConfigured();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -66,7 +67,8 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@agencia.com"
-                  className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40"
+                  disabled={!authConfigured}
+                  className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
             </div>
@@ -84,7 +86,8 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40"
+                  disabled={!authConfigured}
+                  className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
             </div>
@@ -96,16 +99,18 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" disabled={loading} className="w-full">
+            <Button type="submit" disabled={loading || !authConfigured} className="w-full">
               {loading ? <Loader2 className="size-4 animate-spin" /> : "Iniciar sesión"}
             </Button>
           </form>
 
-          {!isSupabaseConfigured() && (
-            <p className="mt-4 border-t border-white/8 pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
-              Modo demo: Supabase no está configurado. Cualquier email válido y contraseña de 4+
-              caracteres inician sesión.
-            </p>
+          {!authConfigured && (
+            <div className="mt-4 flex items-start gap-2 border-t border-white/8 pt-4 text-[11px] leading-relaxed text-warning">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                Supabase Auth no está configurado. El acceso permanece bloqueado hasta configurar las variables de entorno.
+              </span>
+            </div>
           )}
         </div>
       </div>

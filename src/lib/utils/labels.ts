@@ -7,6 +7,7 @@ export const OBJECTIVE_LABELS: Record<CampaignObjective, string> = {
   TRAFFIC: "Tráfico",
   BRAND_AWARENESS: "Reconocimiento de marca",
   SALES: "Ventas",
+  UNKNOWN: "Objetivo no disponible",
 };
 
 export const CREATIVE_TYPE_LABELS: Record<CreativeType, string> = {

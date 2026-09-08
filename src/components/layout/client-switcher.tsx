@@ -67,7 +67,7 @@ export function ClientSwitcher() {
                 <span className="flex flex-col items-start leading-tight">
                   <span>{account.name}</span>
                   <span className="text-[11px] text-muted-foreground-2">
-                    {account.id} · {account.currency}
+                    {account.id} · {account.currency ?? "Moneda no disponible"}
                   </span>
                 </span>
               </DropdownItem>

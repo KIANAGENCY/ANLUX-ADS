@@ -5,6 +5,7 @@ import { Megaphone } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useFilters } from "@/components/providers/filters-provider";
 import type { CampaignWithMetrics } from "@/hooks/use-campaigns";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
 import { OBJECTIVE_LABELS } from "@/lib/utils/labels";
@@ -17,6 +18,7 @@ export function CampaignsTable({
   loading: boolean;
 }) {
   const router = useRouter();
+  const { currency } = useFilters();
 
   const columns: DataTableColumn<CampaignWithMetrics>[] = [
     {
@@ -43,14 +45,14 @@ export function CampaignsTable({
       label: "Presupuesto/día",
       align: "right",
       sortValue: (c) => c.dailyBudget ?? -1,
-      render: (c) => (c.dailyBudget !== null ? formatCurrency(c.dailyBudget) : "—"),
+      render: (c) => (c.dailyBudget !== null ? formatCurrency(c.dailyBudget, currency) : "—"),
     },
     {
       key: "spend",
       label: "Gasto",
       align: "right",
       sortValue: (c) => c.metrics.spend,
-      render: (c) => formatCurrency(c.metrics.spend),
+      render: (c) => formatCurrency(c.metrics.spend, currency),
     },
     {
       key: "impressions",
@@ -71,7 +73,7 @@ export function CampaignsTable({
       label: "CPC",
       align: "right",
       sortValue: (c) => c.metrics.cpc,
-      render: (c) => formatCurrency(c.metrics.cpc),
+      render: (c) => formatCurrency(c.metrics.cpc, currency),
     },
     {
       key: "results",
@@ -85,7 +87,7 @@ export function CampaignsTable({
       label: "Costo/resultado",
       align: "right",
       sortValue: (c) => c.metrics.costPerResult,
-      render: (c) => (c.metrics.results > 0 ? formatCurrency(c.metrics.costPerResult) : "—"),
+      render: (c) => (c.metrics.results > 0 ? formatCurrency(c.metrics.costPerResult, currency) : "—"),
     },
   ];
 

@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
+import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
+import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAccountRangeMetrics } from "@/lib/meta/real/overview";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
-import type { Ad, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
+import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
-import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
+import { aggregateMetrics } from "@/lib/utils/metrics";
 
-/** Modos del AI Analyst. Los envía el frontend explícitamente; el servidor los valida. */
 const ANALYSIS_MODES = ["general", "performance"] as const;
 type AnalysisMode = (typeof ANALYSIS_MODES)[number];
 
@@ -19,10 +21,6 @@ function isAnalysisMode(value: unknown): value is AnalysisMode {
 }
 
 interface AnalyzeRequestBody {
-  /**
-   * Modo explícito de la consulta. Es el contrato: el servidor no lo infiere
-   * de la presencia de otros campos ni del texto de la pregunta.
-   */
   mode?: string;
   clientId?: string;
   dateRange?: DateRange;
@@ -31,22 +29,31 @@ interface AnalyzeRequestBody {
 
 interface GatheredData {
   client: Client;
+  currency: string | null;
   campaigns: Campaign[];
+  adSets: AdSet[];
   ads: Ad[];
   campaignMetrics: Record<string, PerformanceMetrics>;
+  adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
+  alerts: PerformanceAlert[];
 }
 
 const META_ACCOUNT_COLOR = "#1877F2";
 
-/** Campañas + anuncios + métricas del periodo de la cuenta, todo vía `lib/meta/real/`. */
+/**
+ * Reúne únicamente datos reales. Los KPIs de cuenta se piden a Meta como un
+ * rango agregado (`level=account`) para que reach/frequency no se calculen
+ * sumando personas entre días ni aplicando factores aproximados.
+ */
 async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
 
   const [accounts, campaigns] = await Promise.all([fetchAdAccounts(), fetchRealCampaigns(accountId)]);
   const account = accounts.find((a) => a.id === accountId);
+  const currency = account?.currency ?? null;
   const client: Client = {
     id: accountId,
     name: account?.name ?? accountId,
@@ -57,60 +64,75 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     adAccountId: accountId,
   };
 
-  // Sin campañas: no tiene sentido pedir insights ni anuncios — se corta aquí (ver ruta principal).
   if (campaigns.length === 0) {
     return {
       client,
+      currency,
       campaigns: [],
+      adSets: [],
       ads: [],
       campaignMetrics: {},
+      adSetMetrics: {},
       adMetrics: {},
       currentMetrics: aggregateMetrics([]),
       previousMetrics: aggregateMetrics([]),
+      alerts: [],
     };
   }
 
-  const [currentInsights, previousInsights] = await Promise.all([
+  const [currentInsights, previousInsights, currentMetrics, previousMetrics] = await Promise.all([
     fetchAggregatedInsightsByEntity(accountId, "campaign", dateRange.from, dateRange.to),
     fetchAggregatedInsightsByEntity(accountId, "campaign", previousRange.from, previousRange.to),
+    fetchAccountRangeMetrics(accountId, dateRange.from, dateRange.to),
+    fetchAccountRangeMetrics(accountId, previousRange.from, previousRange.to),
   ]);
 
   const campaignMetrics: Record<string, PerformanceMetrics> = {};
-  const previousCampaignMetrics: PerformanceMetrics[] = [];
+  const previousCampaignMetrics: Record<string, PerformanceMetrics> = {};
   for (const campaign of campaigns) {
     const currentRow = currentInsights.get(campaign.id);
     campaignMetrics[campaign.id] = aggregateMetrics(
       currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, dateRange.from)] : []
     );
+
     const previousRow = previousInsights.get(campaign.id);
-    previousCampaignMetrics.push(
-      aggregateMetrics(
-        previousRow
-          ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
-          : []
-      )
+    previousCampaignMetrics[campaign.id] = aggregateMetrics(
+      previousRow
+        ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
+        : []
     );
   }
 
-  const currentMetrics = combineAccountMetrics(Object.values(campaignMetrics));
-
-  // Sin gasto ni impresiones en el rango: tampoco hay nada real que analizar (ver ruta principal).
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
     return {
       client,
+      currency,
       campaigns,
+      adSets: [],
       ads: [],
       campaignMetrics,
+      adSetMetrics: {},
       adMetrics: {},
       currentMetrics,
-      previousMetrics: combineAccountMetrics(previousCampaignMetrics),
+      previousMetrics,
+      alerts: [],
     };
   }
 
-  const [ads, adInsights] = await Promise.all([
+  const [adSets, adSetInsights, ads, adInsights] = await Promise.all([
+    fetchRealAdSets(accountId),
+    fetchAggregatedInsightsByEntity(accountId, "adset", dateRange.from, dateRange.to),
     fetchRealAds(accountId),
     fetchAggregatedInsightsByEntity(accountId, "ad", dateRange.from, dateRange.to),
   ]);
+
+  const adSetMetrics: Record<string, PerformanceMetrics> = {};
+  for (const adSet of adSets) {
+    const row = adSetInsights.get(adSet.id);
+    adSetMetrics[adSet.id] = aggregateMetrics(
+      row ? [mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, dateRange.from)] : []
+    );
+  }
 
   const adMetrics: Record<string, PerformanceMetrics> = {};
   for (const ad of ads) {
@@ -120,14 +142,27 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
   }
 
+  const alerts = buildRealAlertsFromMetrics({
+    campaigns,
+    currentCampaignMetrics: campaignMetrics,
+    previousCampaignMetrics,
+    adSets,
+    adSetMetrics,
+    currency,
+  });
+
   return {
     client,
+    currency,
     campaigns,
+    adSets,
     ads,
     campaignMetrics,
+    adSetMetrics,
     adMetrics,
     currentMetrics,
-    previousMetrics: combineAccountMetrics(previousCampaignMetrics),
+    previousMetrics,
+    alerts,
   };
 }
 
@@ -143,27 +178,6 @@ function noDataAnalysis(): AIAnalysis {
   };
 }
 
-/**
- * Backend del "AI Performance Analyst".
- *
- * El frontend nunca llama al proveedor de IA directamente: envía aquí la
- * cuenta (si hay alguna seleccionada), el rango de fechas y la pregunta.
- *
- * El modo llega **explícito** en el cuerpo y se valida aquí: no se infiere de
- * la presencia de otros campos ni del texto de la pregunta, así que la
- * separación entre ambos es determinista.
- *   - **general** (consulta estratégica): no se consulta Meta bajo ninguna
- *     circunstancia, ni siquiera si el cuerpo trae cuenta o periodo. El
- *     proveedor recibe solo la pregunta, marcada como "sin datos de campaña".
- *     Funciona aunque META_ACCESS_TOKEN falte o esté vencido.
- *   - **performance** (analizar rendimiento): exige cuenta y periodo, y los
- *     valida antes de llamar a Meta o a la IA. Reúne campañas, anuncios y
- *     métricas exclusivamente de Meta Marketing API (`lib/meta/real/`).
- *
- * El proveedor solo recibe métricas reales: no existe ninguna fuente
- * simulada. Si no hay campañas ni gasto/impresiones en el periodo, se
- * devuelve un estado vacío explícito sin llamar al proveedor en absoluto.
- */
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
   try {
@@ -181,34 +195,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── Modo estratégico ────────────────────────────────────────────────────
-  // Barrera dura: en este modo NO se consulta Meta bajo ninguna circunstancia,
-  // aunque el cuerpo traiga clientId o dateRange — se ignoran deliberadamente.
-  // Por eso funciona aunque META_ACCESS_TOKEN falte o esté vencido.
   if (mode === "general") {
     const generalQuestion = question?.trim();
     if (!generalQuestion) {
-      return NextResponse.json(
-        { error: "Escribe una pregunta para la consulta estratégica." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Escribe una pregunta para la consulta estratégica." }, { status: 400 });
     }
 
     try {
-      const analysis = await getAIAnalystService().analyze({
-        mode: "general",
-        question: generalQuestion,
-      });
+      const analysis = await getAIAnalystService().analyze({ mode: "general", question: generalQuestion });
       return NextResponse.json(analysis);
     } catch (err) {
       return aiErrorResponse(err);
     }
   }
 
-  // ── Modo rendimiento ────────────────────────────────────────────────────
-  // Cuenta y periodo son obligatorios, y se validan ANTES de llamar a Meta o
-  // a la IA: sin ellos no puede haber métricas reales, y devolver cualquier
-  // análisis daría la falsa impresión de estar basado en datos.
   const accountId = clientId?.trim();
   if (!accountId) {
     return NextResponse.json(
@@ -238,14 +238,17 @@ export async function POST(req: NextRequest) {
     const analysis = await getAIAnalystService().analyze({
       mode: "performance",
       client: data.client,
+      currency: data.currency,
       dateRange,
       campaigns: data.campaigns,
-      adSets: [],
+      adSets: data.adSets,
       ads: data.ads,
       currentMetrics: data.currentMetrics,
       previousMetrics: data.previousMetrics,
       campaignMetrics: data.campaignMetrics,
+      adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
+      alerts: data.alerts,
       question,
     });
     return NextResponse.json(analysis);

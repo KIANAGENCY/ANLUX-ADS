@@ -53,9 +53,23 @@ async function fetchInsights(
   return res.data ?? [];
 }
 
-/** Insights diarios a nivel de cuenta (spend/impressions/reach/clicks/frequency correctos y ya deduplicados por Meta). */
+/** Insights diarios a nivel de cuenta, usados exclusivamente para la serie temporal. */
 export function fetchAccountDailyInsights(adAccountId: string, since: string, until: string) {
   return fetchInsights(adAccountId, "account", since, until, 1);
+}
+
+/**
+ * Insight agregado de cuenta para TODO el rango. Esta es la fuente correcta
+ * para reach/frequency del periodo: sumar reach diario duplicaría personas que
+ * fueron alcanzadas en más de un día.
+ */
+export async function fetchAccountAggregatedInsight(
+  adAccountId: string,
+  since: string,
+  until: string
+): Promise<RawInsightsRow | null> {
+  const rows = await fetchInsights(adAccountId, "account", since, until);
+  return rows[0] ?? null;
 }
 
 /** Insights diarios a nivel de campaña — usados para interpretar `actions` por campaña (ver `overview.ts`). */
@@ -80,15 +94,7 @@ export async function fetchAggregatedInsightsByEntity(
   return map;
 }
 
-/**
- * Convierte una fila cruda de Insights a nuestro `DailyMetrics`. `results` se
- * interpreta a partir de `actions` usando la acción primaria del objetivo
- * (ver `actions.ts`); si esa acción no viene en la respuesta se usa `0`, no
- * porque se asuma "cero resultados" con certeza, sino porque es el mismo
- * comportamiento que el resto de la app da a un día sin datos (ninguna UI
- * distingue "0 medido" de "0 por ausencia de esa acción" — ambos se
- * muestran igual: sin resultados en ese periodo).
- */
+/** Convierte una fila de insights de entidad a métricas normalizadas. */
 export function mapInsightsRowToDailyMetrics(
   row: RawInsightsRow,
   entityId: string,

@@ -1,6 +1,9 @@
+"use client";
+
 import { Image as ImageIcon, Video, GalleryHorizontal } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
+import { useFilters } from "@/components/providers/filters-provider";
 import type { AdWithMetrics } from "@/hooks/use-ads";
 import { formatCurrency, formatNumber } from "@/lib/utils/format";
 
@@ -12,6 +15,7 @@ const CREATIVE_ICON = {
 
 export function AdCard({ ad }: { ad: AdWithMetrics }) {
   const Icon = CREATIVE_ICON[ad.creativeType];
+  const { currency } = useFilters();
 
   return (
     <Card className="overflow-hidden">
@@ -28,12 +32,15 @@ export function AdCard({ ad }: { ad: AdWithMetrics }) {
         </p>
 
         <div className="grid grid-cols-3 gap-x-2 gap-y-2.5 border-t border-white/8 pt-3 text-xs">
-          <Metric label="Gasto" value={formatCurrency(ad.metrics.spend)} />
+          <Metric label="Gasto" value={formatCurrency(ad.metrics.spend, currency)} />
           <Metric label="Impr." value={formatNumber(ad.metrics.impressions)} />
           <Metric label="CTR" value={`${ad.metrics.ctr.toFixed(2)}%`} />
-          <Metric label="CPC" value={formatCurrency(ad.metrics.cpc)} />
+          <Metric label="CPC" value={formatCurrency(ad.metrics.cpc, currency)} />
           <Metric label="Resultados" value={formatNumber(ad.metrics.results)} />
-          <Metric label="Costo/res." value={ad.metrics.results > 0 ? formatCurrency(ad.metrics.costPerResult) : "—"} />
+          <Metric
+            label="Costo/res."
+            value={ad.metrics.results > 0 ? formatCurrency(ad.metrics.costPerResult, currency) : "—"}
+          />
         </div>
       </div>
     </Card>

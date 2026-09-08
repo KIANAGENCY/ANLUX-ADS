@@ -19,21 +19,19 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 /**
- * Protege las rutas del dashboard a nivel de servidor: un usuario no
- * autenticado que intente entrar directamente por URL es redirigido a
- * `/login` antes de que la página llegue a renderizarse.
+ * Protege las rutas del dashboard a nivel de servidor.
  *
- * En modo demo (sin Supabase configurado) no hay sesión que verificar aquí
- * — la protección la maneja el guard del cliente (`hooks/use-auth-state.ts`,
- * basado en `localStorage`), tal como ya funcionaba antes de conectar
- * Supabase.
- *
- * Nota: en Next.js 16 este archivo se llama "Proxy" (antes "Middleware");
- * la convención de archivo (`proxy.ts` en la raíz de `src/`) y el
- * comportamiento son los mismos, solo cambió el nombre.
+ * ANLUX falla cerrado: si Supabase no está configurado, ninguna ruta protegida
+ * queda accesible mediante una sesión local o simulada. `/login` sigue
+ * disponible para mostrar el error de configuración correspondiente.
  */
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
   if (!isSupabaseConfigured()) {
+    if (isProtectedPath(pathname)) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
     return NextResponse.next();
   }
 
@@ -52,18 +50,13 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // `getUser()` revalida el token contra el servidor de Supabase Auth (a
-  // diferencia de `getSession()`, que solo confía en la cookie) — es la
-  // forma recomendada de verificar sesión en middleware.
+  // `getUser()` revalida el token contra Supabase Auth en cada request.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
   if (!user && isProtectedPath(pathname)) {
-    const redirectUrl = new URL("/login", request.url);
-    return NextResponse.redirect(redirectUrl);
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (user && pathname === "/login") {

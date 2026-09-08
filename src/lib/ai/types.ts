@@ -1,4 +1,4 @@
-import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMetrics } from "@/lib/types";
+import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 
 /**
  * Análisis de rendimiento sobre una cuenta concreta. Se construye en el
@@ -8,15 +8,20 @@ import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceMet
 export interface AIPerformanceRequest {
   mode: "performance";
   client: Client;
+  /** Moneda real configurada en la cuenta publicitaria de Meta; null si Meta no la devolvió. */
+  currency: string | null;
   dateRange: DateRange;
   campaigns: Campaign[];
   adSets: AdSet[];
   ads: Ad[];
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
-  /** Métricas del periodo actual por campaña y por anuncio, para poder señalar casos concretos. */
+  /** Métricas del periodo actual por entidad, para poder señalar casos concretos. */
   campaignMetrics: Record<string, PerformanceMetrics>;
+  adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
+  /** Alertas deterministas calculadas por ANLUX sobre los mismos datos reales. */
+  alerts: PerformanceAlert[];
   /** Pregunta puntual del usuario en el chat, si la hay (modo libre vs "analiza todo"). */
   question?: string;
 }

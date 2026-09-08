@@ -12,6 +12,7 @@ interface RawAdSet {
   daily_budget?: string;
   lifetime_budget?: string;
   optimization_goal?: string;
+  start_time?: string;
   campaign?: { name?: string; objective?: string };
 }
 
@@ -25,10 +26,16 @@ export interface RealAdSet extends AdSet {
   campaignObjective: CampaignObjective;
 }
 
+function toDateOnly(value?: string): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+  return match?.[0];
+}
+
 export async function fetchRealAdSets(adAccountId: string): Promise<RealAdSet[]> {
   const res = await metaGraphGet<AdSetsResponse>(`/${adAccountId}/adsets`, {
     fields:
-      "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,campaign{name,objective}",
+      "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,start_time,campaign{name,objective}",
     limit: 500,
   });
 
@@ -42,6 +49,7 @@ export async function fetchRealAdSets(adAccountId: string): Promise<RealAdSet[]>
     lifetimeBudget: minorUnitsToAmount(a.lifetime_budget),
     audience: "—",
     optimizationGoal: a.optimization_goal ?? "—",
+    startDate: toDateOnly(a.start_time),
     campaignName: a.campaign?.name ?? "—",
     campaignObjective: mapObjective(a.campaign?.objective),
   }));
