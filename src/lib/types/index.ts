@@ -1,8 +1,9 @@
 /**
- * Modelos de dominio compartidos por toda la aplicación.
+ * Modelos de dominio canónicos de ANLUX.
  *
- * Estos tipos representan la forma "canónica" de los datos, independientemente
- * de si provienen de Meta Marketing API o de futuras fuentes de datos.
+ * Un valor `null`, `undefined` o `UNKNOWN` significa que la fuente real no lo
+ * proporcionó o que ANLUX no puede interpretarlo con certeza. No sustituir
+ * esos casos por datos inventados.
  */
 
 // ---------------------------------------------------------------------------
