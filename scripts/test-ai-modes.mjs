@@ -5,20 +5,21 @@
  * proveedor), no una simulación de ella.
  *
  * Uso:
- *   npm run dev                 # en otra terminal
+ *   npm run dev
  *   node scripts/test-ai-modes.mjs
  *
  * Variables opcionales:
  *   BASE_URL     por defecto http://localhost:3000
  *   ACCOUNT_ID   cuenta de Meta real para el caso de rendimiento
  *
- * No contiene datos simulados: las aserciones son sobre códigos de estado y
- * sobre la forma de la respuesta, nunca sobre cifras concretas.
+ * No contiene IDs de cuentas ni datos simulados embebidos. Las aserciones son
+ * sobre códigos de estado y forma de respuesta, nunca sobre cifras concretas.
  */
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const ENDPOINT = `${BASE_URL}/api/ai/analyze`;
-const ACCOUNT_ID = process.env.ACCOUNT_ID ?? "act_1047152237711045";
+const ACCOUNT_ID = process.env.ACCOUNT_ID?.trim() || null;
+const VALIDATION_ONLY_ACCOUNT_ID = "act_validation_only";
 
 const ANALYSIS_FIELDS = ["summary", "issues", "opportunities", "recommendations", "priority", "generatedAt"];
 
@@ -54,16 +55,15 @@ function isAnalysisShape(json) {
   return Boolean(json) && ANALYSIS_FIELDS.every((f) => f in json);
 }
 
-// ── 1. Pregunta estratégica sin clientId ni dateRange ────────────────────
 async function testGeneralQuestion() {
   console.log("\n1. Pregunta estratégica general (sin clientId ni dateRange)");
   const { status, json } = await post({
     mode: "general",
-    question: "¿Qué estrategia de Meta Ads recomiendas para vender insumos de ortodoncia mediante WhatsApp?",
+    question: "¿Qué estrategia de Meta Ads recomiendas para vender mediante WhatsApp?",
   });
 
   if (status === 503 && json?.kind === "auth") {
-    console.log("  ⊘ proveedor de IA sin credencial en este entorno: no se puede validar la respuesta");
+    console.log("  ⊘ proveedor de IA sin credencial en este entorno");
     assert(true, "el endpoint NO exige clientId/dateRange (llegó hasta el proveedor)");
     return;
   }
@@ -74,9 +74,14 @@ async function testGeneralQuestion() {
   assert(["low", "medium", "high"].includes(json?.priority), "priority válida");
 }
 
-// ── 2. Análisis de rendimiento con clientId y dateRange ──────────────────
 async function testPerformanceWithData() {
   console.log("\n2. Análisis de rendimiento (con clientId y dateRange)");
+  if (!ACCOUNT_ID) {
+    console.log("  ⊘ ACCOUNT_ID no definido; se omite la prueba que consulta una cuenta real");
+    assert(true, "la prueba de rendimiento real requiere ACCOUNT_ID explícito");
+    return;
+  }
+
   const { status, json } = await post({
     mode: "performance",
     clientId: ACCOUNT_ID,
@@ -84,8 +89,6 @@ async function testPerformanceWithData() {
     question: "Analiza el rendimiento de la cuenta.",
   });
 
-  // Sin credencial de Meta el endpoint devuelve el error real de la API: es
-  // el comportamiento correcto, nunca datos inventados.
   if (status === 503 && json?.kind === "missing_token") {
     console.log("  ⊘ META_ACCESS_TOKEN ausente en este entorno");
     assert(true, "falla con el error real de Meta, sin sustituirlo por datos simulados");
@@ -101,17 +104,19 @@ async function testPerformanceWithData() {
   assert(isAnalysisShape(json), "devuelve un AIAnalysis completo");
 }
 
-// ── 3. Análisis de rendimiento SIN periodo ───────────────────────────────
 async function testPerformanceMissingRange() {
   console.log("\n3. Rendimiento con cuenta pero sin periodo");
-  const { status, json } = await post({ mode: "performance", clientId: ACCOUNT_ID, question: "¿Cómo va la cuenta?" });
+  const { status, json } = await post({
+    mode: "performance",
+    clientId: ACCOUNT_ID ?? VALIDATION_ONLY_ACCOUNT_ID,
+    question: "¿Cómo va la cuenta?",
+  });
 
   assert(status === 400, "responde 400", `status=${status}`);
   assert(/periodo/i.test(json?.error ?? ""), "el mensaje pide seleccionar un periodo", json?.error);
   assert(!isAnalysisShape(json), "NO devuelve un análisis que parezca basado en métricas");
 }
 
-// ── 4. Sin cuenta y sin pregunta ─────────────────────────────────────────
 async function testGeneralWithoutQuestion() {
   console.log("\n4. Consulta estratégica sin pregunta");
   const { status, json } = await post({ mode: "general" });
@@ -121,7 +126,6 @@ async function testGeneralWithoutQuestion() {
   assert(!isAnalysisShape(json), "NO devuelve un análisis");
 }
 
-// ── 4b. Rendimiento sin cuenta: bloqueado antes de llamar a la IA ────────
 async function testPerformanceWithoutAccount() {
   console.log("\n4b. Modo rendimiento sin cuenta seleccionada");
   const { status, json } = await post({
@@ -135,7 +139,6 @@ async function testPerformanceWithoutAccount() {
   assert(!isAnalysisShape(json), "NO genera un análisis de rendimiento sin datos");
 }
 
-// ── 4c. Modo ausente o inválido: rechazado en el servidor ────────────────
 async function testInvalidMode() {
   console.log("\n4c. Modo ausente o inválido");
 
@@ -148,22 +151,22 @@ async function testInvalidMode() {
   assert(!isAnalysisShape(invalid.json), "NO devuelve un análisis");
 }
 
-// ── 4d. El modo estratégico ignora cuenta y periodo si vienen ────────────
 async function testGeneralIgnoresAccount() {
   console.log("\n4d. Modo estratégico con cuenta y periodo en el cuerpo (deben ignorarse)");
   const { status, json } = await post({
     mode: "general",
-    clientId: ACCOUNT_ID,
+    clientId: ACCOUNT_ID ?? VALIDATION_ONLY_ACCOUNT_ID,
     dateRange: { from: "2026-08-04", to: "2026-09-02" },
     question: "¿Cómo estructurarías una campaña de mensajes?",
   });
 
-  // Si consultara Meta, sin token devolvería missing_token en vez de llegar a la IA.
-  assert(json?.kind !== "missing_token" && json?.kind !== "invalid_token",
-    "NO consulta Meta pese a recibir cuenta y periodo", `kind=${json?.kind} status=${status}`);
+  assert(
+    json?.kind !== "missing_token" && json?.kind !== "invalid_token",
+    "NO consulta Meta pese a recibir cuenta y periodo",
+    `kind=${json?.kind} status=${status}`
+  );
 }
 
-// ── 5. El modo general no depende de Meta ────────────────────────────────
 async function testGeneralIndependentFromMeta() {
   console.log("\n5. El modo general funciona aunque Meta no esté disponible");
 
@@ -171,7 +174,10 @@ async function testGeneralIndependentFromMeta() {
   const metaBroken = !meta.ok;
   console.log(`  (estado de /api/meta/accounts: ${meta.status}${metaBroken ? " — Meta no disponible" : ""})`);
 
-  const { status, json } = await post({ mode: "general", question: "¿Cómo estructurarías una campaña de mensajes en Meta Ads?" });
+  const { status, json } = await post({
+    mode: "general",
+    question: "¿Cómo estructurarías una campaña de mensajes en Meta Ads?",
+  });
 
   if (status === 503 && json?.kind === "auth") {
     console.log("  ⊘ proveedor de IA sin credencial en este entorno");
