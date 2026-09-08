@@ -6,11 +6,12 @@ import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAccountDailyMetrics } from "@/lib/meta/real/overview";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
-import { aggregateMetrics, combineAccountMetrics } from "@/lib/utils/metrics";
+import { aggregateMetrics } from "@/lib/utils/metrics";
 
 /** Modos del AI Analyst. Los envía el frontend explícitamente; el servidor los valida. */
 const ANALYSIS_MODES = ["general", "performance"] as const;
@@ -47,7 +48,13 @@ interface GatheredData {
 
 const META_ACCOUNT_COLOR = "#1877F2";
 
-/** Campañas + conjuntos + anuncios + métricas del periodo, todo vía `lib/meta/real/`. */
+/**
+ * Reúne datos reales para el AI Analyst.
+ *
+ * Los KPIs de CUENTA se obtienen de insights `level=account`, donde Meta ya
+ * deduplica reach correctamente. No se aproximan sumando reach de campañas.
+ * Los resultados se interpretan por objetivo mediante `fetchAccountDailyMetrics`.
+ */
 async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
 
@@ -64,7 +71,6 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     adAccountId: accountId,
   };
 
-  // Sin campañas: no tiene sentido pedir insights ni entidades inferiores.
   if (campaigns.length === 0) {
     return {
       client,
@@ -81,9 +87,11 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     };
   }
 
-  const [currentInsights, previousInsights] = await Promise.all([
+  const [currentInsights, previousInsights, currentAccountRows, previousAccountRows] = await Promise.all([
     fetchAggregatedInsightsByEntity(accountId, "campaign", dateRange.from, dateRange.to),
     fetchAggregatedInsightsByEntity(accountId, "campaign", previousRange.from, previousRange.to),
+    fetchAccountDailyMetrics(accountId, dateRange.from, dateRange.to),
+    fetchAccountDailyMetrics(accountId, previousRange.from, previousRange.to),
   ]);
 
   const campaignMetrics: Record<string, PerformanceMetrics> = {};
@@ -101,10 +109,10 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
   }
 
-  const currentMetrics = combineAccountMetrics(Object.values(campaignMetrics));
-  const previousMetrics = combineAccountMetrics(Object.values(previousCampaignMetrics));
+  // Fuente canónica para KPIs de cuenta: Meta level=account, no una suma aproximada de campañas.
+  const currentMetrics = aggregateMetrics(currentAccountRows);
+  const previousMetrics = aggregateMetrics(previousAccountRows);
 
-  // Sin gasto ni impresiones en el rango: tampoco hay nada real que analizar.
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
     return {
       client,
@@ -183,24 +191,12 @@ function noDataAnalysis(): AIAnalysis {
 /**
  * Backend del "AI Performance Analyst".
  *
- * El frontend nunca llama al proveedor de IA directamente: envía aquí la
- * cuenta (si hay alguna seleccionada), el rango de fechas y la pregunta.
+ * El modo llega explícito y se valida aquí:
+ * - general: no consulta Meta; responde estrategia sin inventar métricas.
+ * - performance: exige cuenta y periodo y reúne exclusivamente datos reales.
  *
- * El modo llega **explícito** en el cuerpo y se valida aquí: no se infiere de
- * la presencia de otros campos ni del texto de la pregunta, así que la
- * separación entre ambos es determinista.
- *   - **general** (consulta estratégica): no se consulta Meta bajo ninguna
- *     circunstancia, ni siquiera si el cuerpo trae cuenta o periodo. El
- *     proveedor recibe solo la pregunta, marcada como "sin datos de campaña".
- *     Funciona aunque META_ACCESS_TOKEN falte o esté vencido.
- *   - **performance** (analizar rendimiento): exige cuenta y periodo, y los
- *     valida antes de llamar a Meta o a la IA. Reúne campañas, conjuntos,
- *     anuncios, métricas y alertas deterministas exclusivamente a partir de
- *     Meta Marketing API (`lib/meta/real/`).
- *
- * El proveedor solo recibe métricas reales: no existe ninguna fuente
- * simulada. Si no hay campañas ni gasto/impresiones en el periodo, se
- * devuelve un estado vacío explícito sin llamar al proveedor en absoluto.
+ * El proveedor solo recibe métricas reales. Si no hay actividad, se devuelve
+ * un estado vacío explícito sin llamar al proveedor de IA.
  */
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
@@ -219,10 +215,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── Modo estratégico ────────────────────────────────────────────────────
-  // Barrera dura: en este modo NO se consulta Meta bajo ninguna circunstancia,
-  // aunque el cuerpo traiga clientId o dateRange — se ignoran deliberadamente.
-  // Por eso funciona aunque META_ACCESS_TOKEN falte o esté vencido.
   if (mode === "general") {
     const generalQuestion = question?.trim();
     if (!generalQuestion) {
@@ -243,10 +235,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Modo rendimiento ────────────────────────────────────────────────────
-  // Cuenta y periodo son obligatorios, y se validan ANTES de llamar a Meta o
-  // a la IA: sin ellos no puede haber métricas reales, y devolver cualquier
-  // análisis daría la falsa impresión de estar basado en datos.
   const accountId = clientId?.trim();
   if (!accountId) {
     return NextResponse.json(
