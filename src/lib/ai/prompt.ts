@@ -31,12 +31,17 @@ Reglas comunes a ambos modos:
 - Si el usuario incluyó una pregunta puntual, respóndela directamente en "summary" antes que nada.
 - Los arreglos "issues", "opportunities" y "recommendations" pueden quedar vacíos si genuinamente no hay nada que reportar en esa categoría — no rellenes con relleno.`;
 
-function topBySpend<T extends { id: string }>(
+function hasActivity(metrics?: PerformanceMetrics): boolean {
+  return Boolean(metrics && (metrics.spend > 0 || metrics.impressions > 0 || metrics.clicks > 0 || metrics.results > 0));
+}
+
+function topBySpend<T extends { id: string; status: string }>(
   items: T[],
   metricsById: Record<string, PerformanceMetrics>,
   limit: number
 ): T[] {
-  return [...items]
+  return items
+    .filter((item) => item.status !== "ARCHIVED" && (item.status === "ACTIVE" || hasActivity(metricsById[item.id])))
     .sort((a, b) => (metricsById[b.id]?.spend ?? 0) - (metricsById[a.id]?.spend ?? 0))
     .slice(0, limit);
 }
