@@ -11,6 +11,8 @@ interface FiltersContextValue {
    */
   clientId: string;
   setClientId: (id: string) => void;
+  /** Moneda real de la cuenta seleccionada; null si Meta no la devolvió. */
+  currency: string | null;
   dateRangePreset: DateRangePreset;
   setDateRangePreset: (preset: DateRangePreset) => void;
   dateRange: { from: string; to: string };
@@ -98,6 +100,11 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     return realAccounts[0]?.id ?? "";
   }, [selectedId, realAccounts]);
 
+  const currency = useMemo(
+    () => realAccounts.find((account) => account.id === clientId)?.currency ?? null,
+    [clientId, realAccounts]
+  );
+
   useEffect(() => {
     if (!clientId) return;
     try {
@@ -112,6 +119,7 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     return {
       clientId,
       setClientId: setSelectedId,
+      currency,
       dateRangePreset,
       setDateRangePreset,
       dateRange,
@@ -120,7 +128,7 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
       realAccountsLoading,
       realAccountsError,
     };
-  }, [clientId, dateRangePreset, realAccounts, realAccountsLoading, realAccountsError]);
+  }, [clientId, currency, dateRangePreset, realAccounts, realAccountsLoading, realAccountsError]);
 
   return <FiltersContext.Provider value={value}>{children}</FiltersContext.Provider>;
 }
