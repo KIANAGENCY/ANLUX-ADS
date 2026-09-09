@@ -30,6 +30,8 @@ jobs:
         run: node scripts/test-decision-engine.mjs
       - name: Intelligence Suite tests
         run: node scripts/test-intelligence-engine.mjs
+      - name: Memory safety tests
+        run: node scripts/test-memory-safety.mjs
       - name: Lint
         run: npm run lint
       - name: Build
