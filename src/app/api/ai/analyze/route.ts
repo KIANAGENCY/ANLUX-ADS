@@ -14,10 +14,31 @@ import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
 
 const ANALYSIS_MODES = ["general", "performance"] as const;
+const MAX_REQUEST_CHARS = 16_384;
+const MAX_QUESTION_CHARS = 4_000;
+const ACCOUNT_ID_RE = /^act_\d+$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_RANGE_DAYS = 366;
+
 type AnalysisMode = (typeof ANALYSIS_MODES)[number];
 
 function isAnalysisMode(value: unknown): value is AnalysisMode {
   return typeof value === "string" && (ANALYSIS_MODES as readonly string[]).includes(value);
+}
+
+function parseIsoDate(value: string): number | null {
+  if (!DATE_RE.test(value)) return null;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp).toISOString().slice(0, 10) === value ? timestamp : null;
+}
+
+function validDateRange(range: DateRange | undefined): range is DateRange {
+  if (!range?.from || !range?.to) return false;
+  const from = parseIsoDate(range.from);
+  const to = parseIsoDate(range.to);
+  if (from === null || to === null || from > to) return false;
+  return (to - from) / 86_400_000 + 1 <= MAX_RANGE_DAYS;
 }
 
 interface AnalyzeRequestBody {
@@ -43,11 +64,6 @@ interface GatheredData {
 
 const META_ACCOUNT_COLOR = "#1877F2";
 
-/**
- * Reúne únicamente datos reales. Los KPIs de cuenta se piden a Meta como un
- * rango agregado (`level=account`) para que reach/frequency no se calculen
- * sumando personas entre días ni aplicando factores aproximados.
- */
 async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
 
@@ -181,7 +197,11 @@ function noDataAnalysis(): AIAnalysis {
 export async function POST(req: NextRequest) {
   let body: AnalyzeRequestBody;
   try {
-    body = await req.json();
+    const raw = await req.text();
+    if (raw.length > MAX_REQUEST_CHARS) {
+      return NextResponse.json({ error: "La solicitud es demasiado grande." }, { status: 413 });
+    }
+    body = JSON.parse(raw) as AnalyzeRequestBody;
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
@@ -191,6 +211,13 @@ export async function POST(req: NextRequest) {
   if (!isAnalysisMode(mode)) {
     return NextResponse.json(
       { error: `El modo de consulta es obligatorio y debe ser uno de: ${ANALYSIS_MODES.join(", ")}.` },
+      { status: 400 }
+    );
+  }
+
+  if (question !== undefined && (typeof question !== "string" || question.length > MAX_QUESTION_CHARS)) {
+    return NextResponse.json(
+      { error: `La pregunta debe ser texto y no superar ${MAX_QUESTION_CHARS} caracteres.` },
       { status: 400 }
     );
   }
@@ -210,15 +237,15 @@ export async function POST(req: NextRequest) {
   }
 
   const accountId = clientId?.trim();
-  if (!accountId) {
+  if (!accountId || !ACCOUNT_ID_RE.test(accountId)) {
     return NextResponse.json(
-      { error: "Selecciona una cuenta de Meta para analizar su rendimiento." },
+      { error: "Selecciona una cuenta de Meta válida para analizar su rendimiento." },
       { status: 400 }
     );
   }
-  if (!dateRange?.from || !dateRange?.to) {
+  if (!validDateRange(dateRange)) {
     return NextResponse.json(
-      { error: "Selecciona un periodo para analizar el rendimiento de esta cuenta." },
+      { error: `Selecciona un periodo válido, en orden cronológico y de hasta ${MAX_RANGE_DAYS} días.` },
       { status: 400 }
     );
   }
@@ -249,7 +276,7 @@ export async function POST(req: NextRequest) {
       adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
       alerts: data.alerts,
-      question,
+      question: question?.trim() || undefined,
     });
     return NextResponse.json(analysis);
   } catch (err) {

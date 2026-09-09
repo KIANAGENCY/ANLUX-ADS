@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 
-/** Prefijos de rutas que requieren sesión iniciada. */
-const PROTECTED_PREFIXES = [
+/** Prefijos de páginas del dashboard que requieren sesión iniciada. */
+const PROTECTED_PAGE_PREFIXES = [
   "/overview",
   "/campaigns",
   "/adsets",
@@ -14,25 +14,72 @@ const PROTECTED_PREFIXES = [
   "/settings",
 ];
 
-function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+/**
+ * APIs internas que exponen datos reales o consumen proveedores de pago.
+ * Nunca deben responder a una petición anónima.
+ */
+const PROTECTED_API_PREFIXES = ["/api/meta", "/api/ai"];
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function isProtectedPage(pathname: string): boolean {
+  return matchesPrefix(pathname, PROTECTED_PAGE_PREFIXES);
+}
+
+function isProtectedApi(pathname: string): boolean {
+  return matchesPrefix(pathname, PROTECTED_API_PREFIXES);
+}
+
+function apiError(message: string, status: 401 | 403 | 503) {
+  return NextResponse.json(
+    { error: message },
+    {
+      status,
+      headers: {
+        "Cache-Control": "private, no-store, max-age=0",
+      },
+    }
+  );
+}
+
+function hasCrossSiteOrigin(request: NextRequest): boolean {
+  if (!UNSAFE_METHODS.has(request.method)) return false;
+
+  const origin = request.headers.get("origin");
+  // Herramientas server-to-server pueden omitir Origin. Si existe, debe ser
+  // exactamente el mismo origen que recibió ANLUX.
+  return Boolean(origin && origin !== request.nextUrl.origin);
 }
 
 /**
- * Protege las rutas del dashboard a nivel de servidor.
+ * Protege dashboard y APIs internas a nivel de servidor.
  *
- * ANLUX falla cerrado: si Supabase no está configurado, ninguna ruta protegida
- * queda accesible mediante una sesión local o simulada. `/login` sigue
- * disponible para mostrar el error de configuración correspondiente.
+ * - Las páginas anónimas se redirigen al login.
+ * - Las APIs anónimas devuelven JSON 401 (nunca redirecciones HTML).
+ * - Métodos con efecto/coste rechazan un Origin cruzado como defensa CSRF.
+ * - Las respuestas API protegidas nunca se almacenan en cachés compartidas.
+ * - Si Supabase no está configurado, todo recurso protegido falla cerrado.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const protectedPage = isProtectedPage(pathname);
+  const protectedApi = isProtectedApi(pathname);
 
   if (!isSupabaseConfigured()) {
-    if (isProtectedPath(pathname)) {
+    if (protectedApi) {
+      return apiError("Autenticación no disponible: Supabase no está configurado.", 503);
+    }
+    if (protectedPage) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     return NextResponse.next();
+  }
+
+  if (protectedApi && hasCrossSiteOrigin(request)) {
+    return apiError("Origen de solicitud no permitido.", 403);
   }
 
   let response = NextResponse.next({ request });
@@ -50,17 +97,25 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // `getUser()` revalida el token contra Supabase Auth en cada request.
+  // `getUser()` revalida la sesión contra Supabase Auth; no confía solo en la cookie local.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && isProtectedPath(pathname)) {
+  if (!user && protectedApi) {
+    return apiError("No autorizado. Inicia sesión para acceder a esta API.", 401);
+  }
+
+  if (!user && protectedPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (user && pathname === "/login") {
     return NextResponse.redirect(new URL("/overview", request.url));
+  }
+
+  if (protectedApi) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
   }
 
   return response;
