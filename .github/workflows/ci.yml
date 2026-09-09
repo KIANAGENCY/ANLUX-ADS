@@ -30,6 +30,9 @@ jobs:
       - name: Dependency security audit
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Decision Engine tests
+        run: node scripts/test-decision-engine.mjs
+
       - name: Lint
         run: npm run lint
 
