@@ -33,3 +33,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Security smoke tests
+        run: |
+          npm start > /tmp/anlux-next.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          node scripts/test-security-smoke.mjs
