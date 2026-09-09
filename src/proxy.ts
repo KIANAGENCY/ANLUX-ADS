@@ -9,6 +9,7 @@ const PROTECTED_PAGE_PREFIXES = [
   "/adsets",
   "/ads",
   "/creatives",
+  "/decisions",
   "/ai-analyst",
   "/alerts",
   "/settings",
