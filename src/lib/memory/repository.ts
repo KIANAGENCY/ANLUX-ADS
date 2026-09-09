@@ -12,19 +12,33 @@ export interface MemoryStatus {
   message: string;
 }
 
+type AuthorizedClient = NonNullable<Awaited<ReturnType<typeof getAuthorizedClient>>["client"]>;
+
 async function getAuthorizedClient() {
   if (!isMemoryEnabled()) {
-    return { client: null, userId: null, status: { state: "disabled", enabled: false, message: "Memoria histórica desactivada por configuración." } satisfies MemoryStatus };
+    return {
+      client: null,
+      userId: null,
+      status: { state: "disabled", enabled: false, message: "Memoria histórica desactivada por configuración." } satisfies MemoryStatus,
+    };
   }
 
   const client = await getSupabaseServerClient();
   if (!client) {
-    return { client: null, userId: null, status: { state: "unavailable", enabled: true, message: "Supabase no está configurado." } satisfies MemoryStatus };
+    return {
+      client: null,
+      userId: null,
+      status: { state: "unavailable", enabled: true, message: "Supabase no está configurado." } satisfies MemoryStatus,
+    };
   }
 
   const { data: authData, error: authError } = await client.auth.getUser();
   if (authError || !authData.user) {
-    return { client: null, userId: null, status: { state: "unauthorized", enabled: true, message: "No existe una sesión válida para memoria histórica." } satisfies MemoryStatus };
+    return {
+      client: null,
+      userId: null,
+      status: { state: "unauthorized", enabled: true, message: "No existe una sesión válida para memoria histórica." } satisfies MemoryStatus,
+    };
   }
 
   const { data: member, error: memberError } = await client
@@ -34,14 +48,30 @@ async function getAuthorizedClient() {
     .maybeSingle();
 
   if (memberError || !member) {
-    return { client: null, userId: authData.user.id, status: { state: "unauthorized", enabled: true, message: "El usuario autenticado no está autorizado como miembro de ANLUX." } satisfies MemoryStatus };
+    return {
+      client: null,
+      userId: authData.user.id,
+      status: { state: "unauthorized", enabled: true, message: "El usuario autenticado no está autorizado como miembro de ANLUX." } satisfies MemoryStatus,
+    };
   }
 
-  return { client, userId: authData.user.id, status: { state: "ready", enabled: true, message: "Memoria histórica disponible." } satisfies MemoryStatus };
+  return {
+    client,
+    userId: authData.user.id,
+    status: { state: "ready", enabled: true, message: "Memoria histórica disponible." } satisfies MemoryStatus,
+  };
 }
 
 export async function getMemoryStatus(): Promise<MemoryStatus> {
   return (await getAuthorizedClient()).status;
+}
+
+async function ensureAccount(client: AuthorizedClient, accountId: string, currency?: string | null) {
+  const { error } = await client.from("meta_ad_accounts").upsert(
+    { id: accountId, currency: currency ?? null, updated_at: new Date().toISOString() },
+    { onConflict: "id" }
+  );
+  if (error) throw error;
 }
 
 function campaignTotals(decisions: PerformanceDecision[]) {
@@ -60,6 +90,27 @@ function campaignTotals(decisions: PerformanceDecision[]) {
     );
 }
 
+export async function saveBusinessGoals(accountId: string, goals: BusinessGoals): Promise<MemoryStatus> {
+  const auth = await getAuthorizedClient();
+  if (!auth.client) return auth.status;
+
+  await ensureAccount(auth.client, accountId);
+  const { error } = await auth.client.from("business_goals").upsert(
+    {
+      ad_account_id: accountId,
+      target_cost_per_result: goals.targetCostPerResult ?? null,
+      minimum_roas: goals.minimumRoas ?? null,
+      monthly_budget: goals.monthlyBudget ?? null,
+      gross_margin_percent: goals.grossMarginPercent ?? null,
+      risk_tolerance: goals.riskTolerance ?? "balanced",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "ad_account_id" }
+  );
+  if (error) throw error;
+  return auth.status;
+}
+
 export async function persistIntelligenceMemory(
   decisionResult: DecisionEngineResult,
   suite: IntelligenceSuiteResult,
@@ -68,19 +119,9 @@ export async function persistIntelligenceMemory(
   const auth = await getAuthorizedClient();
   if (!auth.client) return auth.status;
 
-  const client = auth.client;
   const accountId = decisionResult.accountId;
   const totals = campaignTotals(decisionResult.decisions);
-
-  const { error: accountError } = await client.from("meta_ad_accounts").upsert(
-    {
-      id: accountId,
-      currency: decisionResult.currency,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" }
-  );
-  if (accountError) throw accountError;
+  await ensureAccount(auth.client, accountId, decisionResult.currency);
 
   const hasGoalValue =
     goals.targetCostPerResult != null ||
@@ -88,24 +129,9 @@ export async function persistIntelligenceMemory(
     goals.monthlyBudget != null ||
     goals.grossMarginPercent != null ||
     goals.riskTolerance != null;
+  if (hasGoalValue) await saveBusinessGoals(accountId, goals);
 
-  if (hasGoalValue) {
-    const { error: goalsError } = await client.from("business_goals").upsert(
-      {
-        ad_account_id: accountId,
-        target_cost_per_result: goals.targetCostPerResult ?? null,
-        minimum_roas: goals.minimumRoas ?? null,
-        monthly_budget: goals.monthlyBudget ?? null,
-        gross_margin_percent: goals.grossMarginPercent ?? null,
-        risk_tolerance: goals.riskTolerance ?? "balanced",
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "ad_account_id" }
-    );
-    if (goalsError) throw goalsError;
-  }
-
-  const { error: observationError } = await client.from("account_period_observations").upsert(
+  const { error: observationError } = await auth.client.from("account_period_observations").upsert(
     {
       ad_account_id: accountId,
       period_from: decisionResult.from,
@@ -145,7 +171,7 @@ export async function persistIntelligenceMemory(
       generated_at: decision.generatedAt,
     }));
 
-    const { error: decisionsError } = await client.from("decision_history").upsert(rows, {
+    const { error: decisionsError } = await auth.client.from("decision_history").upsert(rows, {
       onConflict: "ad_account_id,period_from,period_to,entity_type,entity_id,action,score",
       ignoreDuplicates: true,
     });
@@ -164,7 +190,6 @@ export async function loadBusinessGoals(accountId: string): Promise<{ goals: Bus
     .select("target_cost_per_result,minimum_roas,monthly_budget,gross_margin_percent,risk_tolerance")
     .eq("ad_account_id", accountId)
     .maybeSingle();
-
   if (error) throw error;
   if (!data) return { goals: null, status: auth.status };
 
