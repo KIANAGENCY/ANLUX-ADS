@@ -17,28 +17,23 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
       - name: Dependency security audit
         run: npm audit --omit=dev --audit-level=high
-
       - name: Decision Engine tests
         run: node scripts/test-decision-engine.mjs
-
+      - name: Intelligence Suite tests
+        run: node scripts/test-intelligence-engine.mjs
       - name: Lint
         run: npm run lint
-
       - name: Build
         run: npm run build
-
       - name: Security smoke tests
         run: |
           npm start > /tmp/anlux-next.log 2>&1 &
