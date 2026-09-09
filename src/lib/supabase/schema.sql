@@ -9,6 +9,11 @@
 -- guardan una fila por entidad y día (igual que `DailyMetrics` en
 -- `lib/types`), para poder auditar histórico e independizarnos de los
 -- límites de retención de la Graph API de Meta.
+--
+-- SEGURIDAD: todas las tablas quedan con RLS habilitado desde el primer día.
+-- No se define ninguna policy aquí deliberadamente: sin policies el acceso
+-- desde la clave pública queda denegado (fail-closed) hasta que exista un
+-- modelo de permisos explícito y probado.
 -- =============================================================================
 
 -- Usuarios de la agencia con acceso a la app (además de auth.users de Supabase Auth).
@@ -104,7 +109,14 @@ create table if not exists public.ai_analyses (
   created_at timestamptz not null default now()
 );
 
--- Row Level Security: definir y probar antes de activar persistencia real.
--- alter table public.clients enable row level security;
--- alter table public.campaign_snapshots enable row level security;
--- -- ... políticas por definir según el modelo de permisos de la agencia.
+alter table public.users enable row level security;
+alter table public.clients enable row level security;
+alter table public.meta_ad_accounts enable row level security;
+alter table public.campaign_snapshots enable row level security;
+alter table public.adset_snapshots enable row level security;
+alter table public.ad_snapshots enable row level security;
+alter table public.ai_analyses enable row level security;
+
+-- Deliberadamente NO hay policies todavía. Cuando se implemente persistencia,
+-- crear policies mínimas por rol/usuario y probar explícitamente lectura y
+-- escritura con la clave pública antes de desplegar cualquier migración.
