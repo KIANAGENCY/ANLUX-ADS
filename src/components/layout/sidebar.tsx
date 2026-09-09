@@ -8,6 +8,7 @@ import {
   Trophy,
   Sparkles,
   BellRing,
+  BrainCircuit,
   Settings,
 } from "lucide-react";
 import Image from "next/image";
@@ -21,6 +22,7 @@ export const NAV_ITEMS = [
   { href: "/adsets", label: "Conjuntos", icon: Layers },
   { href: "/ads", label: "Anuncios", icon: ImageIcon },
   { href: "/creatives", label: "Creativos", icon: Trophy },
+  { href: "/decisions", label: "Decisiones", icon: BrainCircuit },
   { href: "/ai-analyst", label: "AI Analyst", icon: Sparkles },
   { href: "/alerts", label: "Alertas", icon: BellRing },
   { href: "/settings", label: "Configuración", icon: Settings },
@@ -33,7 +35,7 @@ export const NAV_ITEMS = [
  */
 const NAV_SECTIONS: { label: string; hrefs: string[] }[] = [
   { label: "Análisis", hrefs: ["/overview", "/campaigns", "/adsets", "/ads", "/creatives"] },
-  { label: "Inteligencia", hrefs: ["/ai-analyst", "/alerts"] },
+  { label: "Inteligencia", hrefs: ["/decisions", "/ai-analyst", "/alerts"] },
   { label: "Cuenta", hrefs: ["/settings"] },
 ];
 
