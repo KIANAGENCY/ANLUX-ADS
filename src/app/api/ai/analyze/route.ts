@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
+import { evaluateDecision } from "@/lib/decisions/engine";
+import type { PerformanceDecision } from "@/lib/decisions/types";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
@@ -41,6 +43,30 @@ function validDateRange(range: DateRange | undefined): range is DateRange {
   return (to - from) / 86_400_000 + 1 <= MAX_RANGE_DAYS;
 }
 
+function hasActivity(metrics: PerformanceMetrics): boolean {
+  return metrics.spend > 0 || metrics.impressions > 0 || metrics.clicks > 0 || metrics.results > 0;
+}
+
+const DECISION_PRIORITY: Record<PerformanceDecision["action"], number> = {
+  PAUSE_CANDIDATE: 0,
+  REDUCE: 1,
+  REFRESH_CREATIVE: 2,
+  REVIEW_AUDIENCE: 3,
+  SCALE: 4,
+  WATCH: 5,
+  MAINTAIN: 6,
+  INSUFFICIENT_DATA: 7,
+};
+
+function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] {
+  const confidence = { high: 0, medium: 1, low: 2 } as const;
+  return decisions.sort((a, b) => {
+    const action = DECISION_PRIORITY[a.action] - DECISION_PRIORITY[b.action];
+    if (action !== 0) return action;
+    return confidence[a.confidence] - confidence[b.confidence];
+  });
+}
+
 interface AnalyzeRequestBody {
   mode?: string;
   clientId?: string;
@@ -60,6 +86,7 @@ interface GatheredData {
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
   alerts: PerformanceAlert[];
+  decisions: PerformanceDecision[];
 }
 
 const META_ACCOUNT_COLOR = "#1877F2";
@@ -93,6 +120,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       currentMetrics: aggregateMetrics([]),
       previousMetrics: aggregateMetrics([]),
       alerts: [],
+      decisions: [],
     };
   }
 
@@ -132,29 +160,46 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       currentMetrics,
       previousMetrics,
       alerts: [],
+      decisions: [],
     };
   }
 
-  const [adSets, adSetInsights, ads, adInsights] = await Promise.all([
+  const [adSets, adSetInsights, previousAdSetInsights, ads, adInsights, previousAdInsights] = await Promise.all([
     fetchRealAdSets(accountId),
     fetchAggregatedInsightsByEntity(accountId, "adset", dateRange.from, dateRange.to),
+    fetchAggregatedInsightsByEntity(accountId, "adset", previousRange.from, previousRange.to),
     fetchRealAds(accountId),
     fetchAggregatedInsightsByEntity(accountId, "ad", dateRange.from, dateRange.to),
+    fetchAggregatedInsightsByEntity(accountId, "ad", previousRange.from, previousRange.to),
   ]);
 
   const adSetMetrics: Record<string, PerformanceMetrics> = {};
+  const previousAdSetMetrics: Record<string, PerformanceMetrics> = {};
   for (const adSet of adSets) {
     const row = adSetInsights.get(adSet.id);
     adSetMetrics[adSet.id] = aggregateMetrics(
       row ? [mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, dateRange.from)] : []
     );
+    const previousRow = previousAdSetInsights.get(adSet.id);
+    previousAdSetMetrics[adSet.id] = aggregateMetrics(
+      previousRow
+        ? [mapInsightsRowToDailyMetrics(previousRow, adSet.id, "adset", adSet.campaignObjective, previousRange.from)]
+        : []
+    );
   }
 
   const adMetrics: Record<string, PerformanceMetrics> = {};
+  const previousAdMetrics: Record<string, PerformanceMetrics> = {};
   for (const ad of ads) {
     const row = adInsights.get(ad.id);
     adMetrics[ad.id] = aggregateMetrics(
       row ? [mapInsightsRowToDailyMetrics(row, ad.id, "ad", ad.campaignObjective, dateRange.from)] : []
+    );
+    const previousRow = previousAdInsights.get(ad.id);
+    previousAdMetrics[ad.id] = aggregateMetrics(
+      previousRow
+        ? [mapInsightsRowToDailyMetrics(previousRow, ad.id, "ad", ad.campaignObjective, previousRange.from)]
+        : []
     );
   }
 
@@ -166,6 +211,57 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     adSetMetrics,
     currency,
   });
+
+  const decisions: PerformanceDecision[] = [];
+  for (const campaign of campaigns) {
+    if (campaign.status !== "ACTIVE" || !hasActivity(campaignMetrics[campaign.id] ?? aggregateMetrics([]))) continue;
+    decisions.push(
+      evaluateDecision({
+        entityType: "campaign",
+        entityId: campaign.id,
+        entityName: campaign.name,
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        objective: campaign.objective,
+        current: campaignMetrics[campaign.id],
+        previous: previousCampaignMetrics[campaign.id],
+      })
+    );
+  }
+
+  for (const adSet of adSets) {
+    const current = adSetMetrics[adSet.id];
+    if (adSet.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
+    decisions.push(
+      evaluateDecision({
+        entityType: "adset",
+        entityId: adSet.id,
+        entityName: adSet.name,
+        campaignId: adSet.campaignId,
+        campaignName: adSet.campaignName,
+        objective: adSet.campaignObjective,
+        current,
+        previous: previousAdSetMetrics[adSet.id] ?? aggregateMetrics([]),
+      })
+    );
+  }
+
+  for (const ad of ads) {
+    const current = adMetrics[ad.id];
+    if (ad.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
+    decisions.push(
+      evaluateDecision({
+        entityType: "ad",
+        entityId: ad.id,
+        entityName: ad.name,
+        campaignId: ad.campaignId,
+        campaignName: ad.campaignName,
+        objective: ad.campaignObjective,
+        current,
+        previous: previousAdMetrics[ad.id] ?? aggregateMetrics([]),
+      })
+    );
+  }
 
   return {
     client,
@@ -179,6 +275,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     currentMetrics,
     previousMetrics,
     alerts,
+    decisions: sortDecisions(decisions),
   };
 }
 
@@ -276,6 +373,7 @@ export async function POST(req: NextRequest) {
       adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
       alerts: data.alerts,
+      decisions: data.decisions,
       question: question?.trim() || undefined,
     });
     return NextResponse.json(analysis);

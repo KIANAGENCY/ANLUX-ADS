@@ -1,4 +1,5 @@
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
+import type { PerformanceDecision } from "@/lib/decisions/types";
 
 /**
  * Análisis de rendimiento sobre una cuenta concreta. Se construye en el
@@ -22,6 +23,8 @@ export interface AIPerformanceRequest {
   adMetrics: Record<string, PerformanceMetrics>;
   /** Alertas deterministas calculadas por ANLUX sobre los mismos datos reales. */
   alerts: PerformanceAlert[];
+  /** Decisiones del motor determinístico. El LLM las explica; no las sustituye ni ejecuta. */
+  decisions: PerformanceDecision[];
   /** Pregunta puntual del usuario en el chat, si la hay (modo libre vs "analiza todo"). */
   question?: string;
 }

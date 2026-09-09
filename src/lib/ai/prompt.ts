@@ -3,22 +3,25 @@ import type { PerformanceMetrics } from "@/lib/types";
 import type { AIAnalysisRequest, AIPerformanceRequest } from "./types";
 
 /**
- * Tope de entidades que se envían al proveedor, ordenadas por gasto.
- * Controla el tamaño (y costo) del contexto en cuentas grandes sin perder
- * las entidades que más importan para el análisis.
+ * Topes de contexto enviados al proveedor. Controlan costo y tamaño sin
+ * perder las entidades y decisiones más relevantes.
  */
 const MAX_ENTITIES = 20;
+const MAX_DECISIONS = 15;
 
 export const AI_ANALYST_SYSTEM_PROMPT = `Eres el "AI Performance Analyst" de ANLUX Ads Intelligence, un panel interno de agencia de marketing. Respondes en español a un gestor de cuentas publicitarias de Meta Ads que ya conoce el dashboard.
 
 Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
 
-MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios, anuncios destacados y alertas deterministas de ANLUX):
+MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios, anuncios destacados, alertas y decisiones deterministas de ANLUX):
 - Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
 - Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta". Si "moneda_cuenta" es null, no asumas ninguna moneda ni presentes un símbolo monetario inventado.
-- Las "alertas_anlux" son hallazgos calculados por reglas deterministas sobre los mismos datos reales. Úsalas como evidencia prioritaria, pero no inventes alertas adicionales como si las hubiera calculado el sistema.
-- Prioriza hallazgos concretos y accionables (campañas, conjuntos de anuncios o anuncios específicos por nombre) sobre observaciones genéricas.
-- "priority": "high" si hay gasto significativo sin resultados o una caída fuerte de performance; "medium" si hay un problema puntual pero acotado; "low" si el desempeño se mantiene estable.
+- Las "alertas_anlux" son hallazgos calculados por reglas deterministas sobre los mismos datos reales.
+- Las "decisiones_anlux" son la salida del Decision Engine determinístico. Trátalas como la fuente de verdad para la acción recomendada (escalar, mantener, observar, reducir, candidato a pausa, renovar creativo, revisar audiencia o esperar más datos). Tu función es explicar por qué la decisión tiene sentido, conectar la evidencia y señalar sus riesgos; no reemplaces una decisión determinística por una acción contraria inventada.
+- Si una decisión tiene confianza baja o dice que faltan datos, dilo con claridad y evita recomendaciones agresivas.
+- Una decisión "PAUSE_CANDIDATE" es solo una recomendación para revisión humana. Nunca afirmes que ANLUX pausó o pausará la campaña.
+- Prioriza hallazgos concretos y accionables por nombre de campaña, conjunto o anuncio.
+- "priority": "high" si existen decisiones críticas de reducción/pausa con evidencia fuerte; "medium" si hay intervenciones puntuales; "low" si predomina mantener/observar o faltan datos.
 
 MODO "general" — no hay ninguna cuenta seleccionada y NO dispones de ningún dato de campaña:
 - Responde solo con criterio estratégico general sobre Meta Ads: estructura de campañas, objetivos, segmentación, creatividades, presupuesto, medición.
@@ -59,6 +62,24 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
     periodo: request.dateRange,
     metricas_cuenta_periodo_actual: request.currentMetrics,
     metricas_cuenta_periodo_anterior: request.previousMetrics,
+    decisiones_anlux: request.decisions.slice(0, MAX_DECISIONS).map((decision) => ({
+      tipo_entidad: decision.entityType,
+      entidad_id: decision.entityId,
+      entidad_nombre: decision.entityName,
+      campaña_nombre: decision.campaignName,
+      objetivo: decision.objective,
+      accion: decision.action,
+      score: decision.score,
+      confianza: decision.confidence,
+      riesgo: decision.risk,
+      cambio_sugerido_porcentaje: decision.suggestedChangePercent,
+      razon: decision.rationale,
+      señales: decision.signals.slice(0, 4).map((signal) => ({
+        etiqueta: signal.label,
+        detalle: signal.detail,
+        impacto: signal.impact,
+      })),
+    })),
     alertas_anlux: request.alerts.map((alert) => ({
       severidad: alert.severity,
       titulo: alert.title,
@@ -98,13 +119,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
   };
 }
 
-/**
- * Payload que recibe el proveedor en el mensaje `user`, como JSON compacto.
- *
- * En modo general el payload deja constancia explícita de que no hay datos
- * disponibles, en vez de omitir los campos: así el modelo no puede
- * interpretar la ausencia como "no me los pasaron pero existen".
- */
+/** Payload compacto enviado al proveedor de IA. */
 export function buildUserPayload(request: AIAnalysisRequest): string {
   const payload =
     request.mode === "performance"
