@@ -36,14 +36,26 @@ function isPublishableKey(value: string | undefined): value is string {
 const configuredUrl = normalizeProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const configuredKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const hasValidEnvironmentPair = Boolean(configuredUrl && isPublishableKey(configuredKey));
+const hasKnownBrokenProductionPair = Boolean(
+  configuredUrl === ANLUX_SUPABASE_URL &&
+  normalizeProjectUrl(configuredKey) === ANLUX_SUPABASE_URL,
+);
 
 // The production project previously received the REST endpoint and project URL
 // in the wrong Vercel fields. Keep the app available with its public project
-// credentials while still preferring a complete, valid environment pair.
-export const supabaseUrl = hasValidEnvironmentPair ? configuredUrl! : ANLUX_SUPABASE_URL;
+// credentials while still preferring a complete, valid environment pair. The
+// fallback only applies to that exact known pair so missing configuration still
+// fails closed in CI and in new deployments.
+export const supabaseUrl = hasValidEnvironmentPair
+  ? configuredUrl!
+  : hasKnownBrokenProductionPair
+    ? ANLUX_SUPABASE_URL
+    : undefined;
 export const supabasePublishableKey = hasValidEnvironmentPair
   ? configuredKey!
-  : ANLUX_SUPABASE_PUBLISHABLE_KEY;
+  : hasKnownBrokenProductionPair
+    ? ANLUX_SUPABASE_PUBLISHABLE_KEY
+    : undefined;
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
