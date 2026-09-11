@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
+const RECOVERY_REDIRECT_URL = "https://anlux-ads.vercel.app/reset-password";
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +33,18 @@ export default function ForgotPasswordPage() {
     }
 
     setLoading(true);
-    const redirectTo = `${window.location.origin}/reset-password`;
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: RECOVERY_REDIRECT_URL,
+    });
     setLoading(false);
 
     if (resetError) {
-      setError("No se pudo enviar el correo de recuperación. Inténtalo de nuevo.");
+      const message = resetError.message.toLowerCase();
+      if (message.includes("rate limit") || message.includes("too many")) {
+        setError("Se alcanzó temporalmente el límite de correos de recuperación. Espera unos minutos e inténtalo de nuevo.");
+      } else {
+        setError("No se pudo enviar el correo de recuperación. Verifica la configuración de Auth e inténtalo de nuevo.");
+      }
       return;
     }
 
