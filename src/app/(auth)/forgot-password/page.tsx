@@ -39,12 +39,16 @@ export default function ForgotPasswordPage() {
     setLoading(false);
 
     if (resetError) {
-      const message = resetError.message.toLowerCase();
-      if (message.includes("rate limit") || message.includes("too many")) {
-        setError("Se alcanzó temporalmente el límite de correos de recuperación. Espera unos minutos e inténtalo de nuevo.");
-      } else {
-        setError("No se pudo enviar el correo de recuperación. Verifica la configuración de Auth e inténtalo de nuevo.");
-      }
+      const details = [
+        resetError.message,
+        "code" in resetError && resetError.code ? `código: ${String(resetError.code)}` : null,
+        resetError.status ? `HTTP ${resetError.status}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      setError(`Supabase rechazó la solicitud: ${details}`);
+      console.error("[ANLUX][password-recovery]", resetError);
       return;
     }
 
