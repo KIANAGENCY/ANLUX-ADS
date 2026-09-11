@@ -9,8 +9,53 @@
  * puede exponerse al navegador; la autorización real depende de Supabase Auth
  * y de sus políticas, no de mantener esta clave en secreto.
  */
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-export const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const ANLUX_SUPABASE_URL = "https://maxdkrehemltjwdbdvkc.supabase.co";
+const ANLUX_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_RZ_uPRxE_OwlLybbNbUSqQ_HCccusNP";
+
+function normalizeProjectUrl(value: string | undefined): string | null {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !url.hostname.endsWith(".supabase.co")) {
+      return null;
+    }
+
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isPublishableKey(value: string | undefined): value is string {
+  if (!value) return false;
+
+  return value.startsWith("sb_publishable_") || value.split(".").length === 3;
+}
+
+const configuredUrl = normalizeProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const configuredKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const hasValidEnvironmentPair = Boolean(configuredUrl && isPublishableKey(configuredKey));
+const hasKnownBrokenProductionPair = Boolean(
+  configuredUrl === ANLUX_SUPABASE_URL &&
+  normalizeProjectUrl(configuredKey) === ANLUX_SUPABASE_URL,
+);
+
+// The production project previously received the REST endpoint and project URL
+// in the wrong Vercel fields. Keep the app available with its public project
+// credentials while still preferring a complete, valid environment pair. The
+// fallback only applies to that exact known pair so missing configuration still
+// fails closed in CI and in new deployments.
+export const supabaseUrl = hasValidEnvironmentPair
+  ? configuredUrl!
+  : hasKnownBrokenProductionPair
+    ? ANLUX_SUPABASE_URL
+    : undefined;
+export const supabasePublishableKey = hasValidEnvironmentPair
+  ? configuredKey!
+  : hasKnownBrokenProductionPair
+    ? ANLUX_SUPABASE_PUBLISHABLE_KEY
+    : undefined;
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
