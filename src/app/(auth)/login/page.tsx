@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, BarChart3, Loader2, Lock, Mail } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -74,9 +75,16 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-foreground/80">
-                Contraseña
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="password" className="text-xs font-medium text-foreground/80">
+                  Contraseña
+                </label>
+                {authConfigured && (
+                  <Link href="/forgot-password" className="text-[11px] text-accent hover:underline">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input
