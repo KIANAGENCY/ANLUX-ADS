@@ -16,7 +16,7 @@ function normalizeProjectUrl(value: string | undefined): string | null {
   if (!value) return null;
 
   try {
-    const url = new URL(value);
+    const url = new URL(value.trim());
     if (url.protocol !== "https:" || !url.hostname.endsWith(".supabase.co")) {
       return null;
     }
@@ -30,11 +30,20 @@ function normalizeProjectUrl(value: string | undefined): string | null {
 function isPublishableKey(value: string | undefined): value is string {
   if (!value) return false;
 
-  return value.startsWith("sb_publishable_") || value.split(".").length === 3;
+  const candidate = value.trim();
+
+  // Modern Supabase publishable keys use this explicit prefix.
+  if (candidate.startsWith("sb_publishable_")) return true;
+
+  // Legacy anon keys are JWTs. Require a JWT-like base64url structure instead
+  // of merely checking for two dots; a Supabase URL such as
+  // https://project.supabase.co also contains two dots and must never be
+  // accepted as an API key.
+  return /^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(candidate);
 }
 
 const configuredUrl = normalizeProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const configuredKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const configuredKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 const hasValidEnvironmentPair = Boolean(configuredUrl && isPublishableKey(configuredKey));
 const hasKnownBrokenProductionPair = Boolean(
   configuredUrl === ANLUX_SUPABASE_URL &&
