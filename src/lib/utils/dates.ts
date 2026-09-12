@@ -18,10 +18,17 @@ function endOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
-/** Referencia "hoy" para todos los cálculos de rangos, fijada a medianoche UTC. */
+/**
+ * Referencia "hoy" usando el día calendario local del navegador.
+ *
+ * Se codifica ese día como medianoche UTC para mantener el resto de las
+ * operaciones deterministas. Esto evita que, por ejemplo, a las 18:00 en
+ * Baja California Sur el rango termine ya en el día siguiente sólo porque
+ * UTC cruzó medianoche antes que la cuenta publicitaria de Meta.
+ */
 export function getToday(): Date {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 }
 
 export const DATE_RANGE_PRESET_LABELS: Record<DateRangePreset, string> = {
