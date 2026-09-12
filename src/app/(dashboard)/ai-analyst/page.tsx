@@ -17,6 +17,15 @@ export default function AIAnalystPage() {
     setInput("");
   }
 
+  function handleQuickQuestion(question: string) {
+    if (accountSelected) {
+      setMode("performance");
+      askQuestion(question, "performance");
+      return;
+    }
+    askQuestion(question, mode);
+  }
+
   return (
     <div className="flex h-[calc(100dvh-8.5rem)] flex-col">
       {messages.length === 0 ? (
@@ -31,7 +40,7 @@ export default function AIAnalystPage() {
               periodo seleccionado.
             </p>
           </div>
-          <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />
+          <QuickQuestions onSelect={handleQuickQuestion} disabled={loading} />
         </div>
       ) : (
         <div className="flex-1 space-y-5 overflow-y-auto pb-4">
@@ -48,7 +57,7 @@ export default function AIAnalystPage() {
 
       <div className="space-y-3 border-t border-border-subtle pt-4">
         <ModeSelector value={mode} onChange={setMode} disabled={loading} accountSelected={accountSelected} />
-        {messages.length > 0 && <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />}
+        {messages.length > 0 && <QuickQuestions onSelect={handleQuickQuestion} disabled={loading} />}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             value={input}
