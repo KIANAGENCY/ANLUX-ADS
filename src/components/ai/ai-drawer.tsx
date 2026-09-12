@@ -39,11 +39,11 @@ export function AIDrawerProvider({ children }: { children: ReactNode }) {
   const { messages, loading, askQuestion, scrollRef } = useAIAnalysis();
   const { clientId } = useFilters();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<AnalysisMode>("general");
+  // Si existe una cuenta real, AI Analyst debe priorizar datos de Meta. Mientras
+  // las cuentas se cargan, el modo derivado cae a consulta estratégica.
+  const [selectedMode, setSelectedMode] = useState<AnalysisMode>("performance");
 
   const accountSelected = Boolean(clientId);
-  // El modo rendimiento exige cuenta: si no la hay, la consulta estratégica es
-  // la única ejecutable. Se deriva en vez de sincronizarse con un efecto.
   const mode: AnalysisMode = selectedMode === "performance" && !accountSelected ? "general" : selectedMode;
 
   const lastAnalysis = useMemo(() => {
@@ -106,6 +106,15 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
     setInput("");
   }
 
+  function handleQuickQuestion(question: string) {
+    if (accountSelected) {
+      setMode("performance");
+      askQuestion(question, "performance");
+      return;
+    }
+    askQuestion(question, mode);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end"
@@ -141,7 +150,7 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
                 Pregunta sobre el performance de tu cuenta. El análisis se genera a partir de las métricas del
                 periodo seleccionado.
               </p>
-              <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />
+              <QuickQuestions onSelect={handleQuickQuestion} disabled={loading} />
             </div>
           ) : (
             <>
@@ -160,7 +169,7 @@ function AIDrawer({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | n
 
         <div className="space-y-3 border-t border-border-subtle px-5 py-4">
           <ModeSelector value={mode} onChange={setMode} disabled={loading} accountSelected={accountSelected} />
-          {messages.length > 0 && <QuickQuestions onSelect={(q) => askQuestion(q, mode)} disabled={loading} />}
+          {messages.length > 0 && <QuickQuestions onSelect={handleQuickQuestion} disabled={loading} />}
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               value={input}
