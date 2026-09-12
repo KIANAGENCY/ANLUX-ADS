@@ -57,8 +57,6 @@ export async function fetchAccountRangeMetrics(
     fetchAggregatedInsightsByEntity(adAccountId, "campaign", since, until),
   ]);
 
-  if (!accountRow) return aggregateMetrics([]);
-
   let results = 0;
   for (const [campaignId, row] of campaignRows) {
     const objective = campaignObjectives.get(campaignId) ?? "UNKNOWN";
@@ -66,16 +64,49 @@ export async function fetchAccountRangeMetrics(
     results += getPrimaryResult(actions, objective) ?? 0;
   }
 
-  return aggregateMetrics([
-    {
-      date: accountRow.date_start ?? since,
-      entityId: adAccountId,
-      entityType: "account",
-      spend: toNumber(accountRow.spend),
-      impressions: toNumber(accountRow.impressions),
-      reach: toNumber(accountRow.reach),
-      clicks: toNumber(accountRow.clicks),
-      results,
-    },
-  ]);
+  if (accountRow) {
+    return aggregateMetrics([
+      {
+        date: accountRow.date_start ?? since,
+        entityId: adAccountId,
+        entityType: "account",
+        spend: toNumber(accountRow.spend),
+        impressions: toNumber(accountRow.impressions),
+        reach: toNumber(accountRow.reach),
+        clicks: toNumber(accountRow.clicks),
+        results,
+      },
+    ]);
+  }
+
+  /**
+   * Meta puede devolver filas de insights a nivel campaña y, de forma
+   * transitoria, omitir la fila agregada de cuenta. Antes ANLUX interpretaba
+   * ese caso como "cero actividad" y descartaba campañas reales.
+   *
+   * Spend, impressions, clicks y results son aditivos entre campañas, así que
+   * se pueden recuperar de forma segura. Reach NO se suma porque personas
+   * alcanzadas por varias campañas quedarían duplicadas; se mantiene en 0
+   * hasta que Meta entregue el agregado de cuenta correcto.
+   */
+  if (campaignRows.size > 0) {
+    const fallbackRows: DailyMetrics[] = [];
+    for (const [campaignId, row] of campaignRows) {
+      const objective = campaignObjectives.get(campaignId) ?? "UNKNOWN";
+      const actions = parseActionsArray(row.actions);
+      fallbackRows.push({
+        date: row.date_start ?? since,
+        entityId: campaignId,
+        entityType: "campaign",
+        spend: toNumber(row.spend),
+        impressions: toNumber(row.impressions),
+        reach: 0,
+        clicks: toNumber(row.clicks),
+        results: getPrimaryResult(actions, objective) ?? 0,
+      });
+    }
+    return aggregateMetrics(fallbackRows);
+  }
+
+  return aggregateMetrics([]);
 }
