@@ -26,10 +26,30 @@ export default function ResetPasswordPage() {
       }
 
       try {
+        // Supabase puede procesar automáticamente el callback de recuperación
+        // antes de que este efecto se ejecute. Si ya existe sesión, no debemos
+        // intentar canjear el mismo código una segunda vez.
+        const { data: existingData, error: existingError } = await supabase.auth.getSession();
+        if (existingError) throw existingError;
+        if (existingData.session) {
+          if (!cancelled) setReady(true);
+          return;
+        }
+
         const code = new URLSearchParams(window.location.search).get("code");
         if (code) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) throw exchangeError;
+          if (exchangeError) {
+            // En una carrera con el procesamiento automático, el canje manual
+            // puede fallar aunque la sesión ya haya quedado creada. Verificamos
+            // de nuevo antes de declarar el enlace inválido.
+            const { data: recoveredData } = await supabase.auth.getSession();
+            if (recoveredData.session) {
+              if (!cancelled) setReady(true);
+              return;
+            }
+            throw exchangeError;
+          }
         }
 
         const { data, error: sessionError } = await supabase.auth.getSession();
