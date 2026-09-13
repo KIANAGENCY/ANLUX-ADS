@@ -12,7 +12,7 @@ export const ACTIVE_META_CLIENT = {
   key: "hotel-expert",
   clientName: "Hotel Expert",
   portfolioName: "Hotel Expert MX",
-  adAccountId: "act_2138975613684877",
+  adAccountId: "act_1574477574179117",
 } as const;
 
 export function isActiveMetaAdAccount(accountId: string): boolean {
