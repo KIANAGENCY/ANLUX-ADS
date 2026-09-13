@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { canAccessAnlux } from "@/lib/supabase/access";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 
@@ -15,6 +16,8 @@ export async function proxy(request:NextRequest){
  let response=NextResponse.next({request});
  const supabase=createServerClient(supabaseUrl!,supabasePublishableKey!,{cookies:{getAll(){return request.cookies.getAll();},setAll(cookies){cookies.forEach(({name,value})=>request.cookies.set(name,value));response=NextResponse.next({request});cookies.forEach(({name,value,options})=>response.cookies.set(name,value,options));}}});
  const {data:{user}}=await supabase.auth.getUser();
+ if(user&&!canAccessAnlux(user)&&protectedApi)return apiError("Tu cuenta necesita una invitación de ANLUX.",403);
+ if(user&&!canAccessAnlux(user)&&protectedPage)return NextResponse.redirect(new URL("/access-required",request.url));
  if(!user&&protectedApi)return apiError("No autorizado. Inicia sesión para acceder a esta API.",401);
  if(!user&&protectedPage)return NextResponse.redirect(new URL("/login",request.url));
  if(user&&pathname==="/login")return NextResponse.redirect(new URL("/overview",request.url));
