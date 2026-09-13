@@ -1,5 +1,6 @@
 import "server-only";
 import type { MetaAdAccountSummary } from "@/lib/types";
+import { ACTIVE_META_CLIENT } from "@/lib/meta/account-binding";
 import { metaGraphGet } from "./graph-client";
 import { metaConfig } from "../config";
 
@@ -25,7 +26,6 @@ function mapAccounts(res: AdAccountsResponse): MetaAdAccountSummary[] {
   }));
 }
 
-/** Cuentas sobre las que el usuario del token tiene acceso directo. */
 async function fetchOwnedAdAccounts(): Promise<MetaAdAccountSummary[]> {
   const res = await metaGraphGet<AdAccountsResponse>("/me/adaccounts", {
     fields: ACCOUNT_FIELDS,
@@ -34,11 +34,6 @@ async function fetchOwnedAdAccounts(): Promise<MetaAdAccountSummary[]> {
   return mapAccounts(res);
 }
 
-/**
- * Cuentas de cliente del Business Manager: cuentas de terceros administradas
- * por el negocio a las que el token tiene acceso, pero que no aparecen en
- * `/me/adaccounts` porque no pertenecen al usuario.
- */
 async function fetchClientAdAccounts(businessId: string): Promise<MetaAdAccountSummary[]> {
   const res = await metaGraphGet<AdAccountsResponse>(`/${businessId}/client_ad_accounts`, {
     fields: ACCOUNT_FIELDS,
@@ -48,18 +43,11 @@ async function fetchClientAdAccounts(businessId: string): Promise<MetaAdAccountS
 }
 
 /**
- * Descubre las cuentas publicitarias accesibles con el token actual.
+ * ANLUX está vinculado de forma explícita a Hotel Expert.
  *
- * Combina dos orígenes porque `/me/adaccounts` solo devuelve las cuentas
- * propias del usuario: las cuentas de cliente administradas desde un Business
- * Manager quedan fuera aunque el token tenga acceso real a ellas. Cuando
- * `META_BUSINESS_ID` está definido, se consulta también
- * `/{business_id}/client_ad_accounts` y se fusionan ambas listas.
- *
- * Tolerancia a fallos: cada origen se resuelve por separado. Si uno falla
- * (permisos, business inexistente, rate limit...) se devuelven las cuentas del
- * otro. Solo si fallan todos se propaga el error, para que el endpoint siga
- * distinguiendo token ausente / inválido / sin permisos como hasta ahora.
+ * Seguimos consultando las fuentes que Meta permite al token para confirmar
+ * que la cuenta exista y sea accesible, pero nunca devolvemos otras cuentas
+ * del usuario o de otros portafolios comerciales.
  */
 export async function fetchAdAccounts(): Promise<MetaAdAccountSummary[]> {
   const { businessId } = metaConfig;
@@ -72,7 +60,6 @@ export async function fetchAdAccounts(): Promise<MetaAdAccountSummary[]> {
   }
 
   const settled = await Promise.allSettled(sources.map((s) => s.promise));
-
   const accounts: MetaAdAccountSummary[] = [];
   const seen = new Set<string>();
   const failures: unknown[] = [];
@@ -86,18 +73,22 @@ export async function fetchAdAccounts(): Promise<MetaAdAccountSummary[]> {
       );
       return;
     }
+
     for (const account of result.value) {
+      if (account.id !== ACTIVE_META_CLIENT.adAccountId) continue;
       if (seen.has(account.id)) continue;
       seen.add(account.id);
       accounts.push(account);
     }
   });
 
-  // Ningún origen respondió: se propaga el primer error para conservar el
-  // `kind` de MetaApiError que la ruta traduce a su código HTTP.
+  if (accounts.length > 0) return accounts;
+
   if (failures.length === settled.length) {
     throw failures[0];
   }
 
-  return accounts;
+  throw new Error(
+    `La cuenta configurada para ${ACTIVE_META_CLIENT.clientName} (${ACTIVE_META_CLIENT.adAccountId}) no está accesible con el token actual.`
+  );
 }
