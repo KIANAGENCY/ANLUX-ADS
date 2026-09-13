@@ -1,18 +1,17 @@
 import type { User } from "@supabase/supabase-js";
 
-type AnluxAccessUser = Pick<User, "app_metadata"> & {
-  invited_at?: string | null;
-};
+type AnluxAccessUser = Pick<User, "app_metadata">;
+
+const ALLOWED_ROLES = new Set(["admin", "member"]);
 
 /**
  * ANLUX is invite-only.
  *
- * Authorization relies exclusively on server-controlled Supabase fields:
- * - app_metadata.anlux_role for administrators
- * - invited_at for accounts created through the admin invitation flow
- *
- * user_metadata must never be used for authorization because users can edit it.
+ * Authorization relies exclusively on app_metadata.anlux_role because
+ * app_metadata is controlled by trusted server/admin flows. user_metadata must
+ * never be used for authorization because authenticated users can edit it.
  */
 export function canAccessAnlux(user: AnluxAccessUser): boolean {
-  return user.app_metadata?.anlux_role === "admin" || Boolean(user.invited_at);
+  const role = user.app_metadata?.anlux_role;
+  return typeof role === "string" && ALLOWED_ROLES.has(role);
 }
