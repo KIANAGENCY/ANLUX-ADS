@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { ACTIVE_META_CLIENT, isActiveMetaAdAccount } from "@/lib/meta/account-binding";
 
 const ACCOUNT_ID_RE = /^act_\d+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -19,11 +20,9 @@ function parseIsoDate(value: string): number | null {
 }
 
 /**
- * Lee y valida `accountId`, `from` y `to` de la query string, comunes a
- * todos los endpoints `/api/meta/*` que necesitan cuenta + rango de fechas.
- *
- * Además de validar formato, limita el rango para evitar consultas
- * accidentalmente enormes a Meta y rechaza fechas imposibles/invertidas.
+ * Valida cuenta + rango y aplica el binding del cliente activo.
+ * ANLUX no debe aceptar un accountId arbitrario aunque el token de Meta tenga
+ * permisos sobre otras cuentas o portafolios.
  */
 export function parseAccountRangeParams(
   searchParams: URLSearchParams
@@ -38,6 +37,18 @@ export function parseAccountRangeParams(
       response: NextResponse.json(
         { error: "El parámetro accountId es obligatorio y debe tener el formato 'act_XXXXXXXXXX'." },
         { status: 400 }
+      ),
+    };
+  }
+
+  if (!isActiveMetaAdAccount(accountId)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: `ANLUX está vinculado a ${ACTIVE_META_CLIENT.clientName}. La cuenta solicitada no está autorizada para este cliente.`,
+        },
+        { status: 403 }
       ),
     };
   }
