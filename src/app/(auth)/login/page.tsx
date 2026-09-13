@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, BarChart3, Loader2, Lock, Mail } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -44,11 +45,15 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="flex size-11 items-center justify-center rounded-xl gradient-accent">
-            <BarChart3 className="size-5.5 text-white" />
-          </div>
+          <Image
+            src="/brand/anlux-ads-logo.svg"
+            alt="ANLUX Ads"
+            width={624}
+            height={318}
+            priority
+            className="h-24 w-auto"
+          />
           <div>
-            <h1 className="text-lg font-semibold text-foreground">ANLUX Ads Intelligence</h1>
             <p className="text-sm text-muted-foreground">Panel interno de performance marketing</p>
           </div>
         </div>
