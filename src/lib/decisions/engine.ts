@@ -49,7 +49,7 @@ function scoreCommon(signals: DecisionSignal[], current: PerformanceMetrics, pre
   }
   return score;
 }
-function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null) {
+function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null, resultsAvailable?: boolean) {
   let score = 0;
   const cpr = percentChange(current.costPerResult, previous.costPerResult);
   if (current.results >= 3 && previous.results >= 3 && cpr !== null) {
@@ -61,7 +61,7 @@ function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, pre
     if (current.costPerResult <= target) { score += 10; addSignal(signals, "target_met", "Objetivo confirmado cumplido", "El costo por conversación está dentro del objetivo confirmado.", 10); }
     else if (current.costPerResult >= target * 1.5) { score -= 15; addSignal(signals, "target_missed", "Objetivo confirmado superado", "El costo por conversación excede de forma importante el objetivo confirmado.", -15); }
   }
-  if (current.results === 0 && current.clicks >= 40) { score -= 20; addSignal(signals, "clicks_no_results", "Tráfico sin conversaciones", "Hay actividad, pero Meta reportó cero conversaciones solo cuando el dato está confirmado.", -20); }
+  if (resultsAvailable === true && current.results === 0 && current.clicks >= 40) { score -= 20; addSignal(signals, "clicks_no_results", "Tráfico sin conversaciones", "Hay actividad, pero Meta reportó cero conversaciones solo cuando el dato está confirmado.", -20); }
   return score;
 }
 function scoreTraffic(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics) {
@@ -117,7 +117,7 @@ function rationale(action: DecisionAction, level: DecisionConfidence, score: num
 export function evaluateDecision(input: DecisionEntityInput): PerformanceDecision {
   const signals: DecisionSignal[] = [];
   let score = 50 + scoreCommon(signals, input.current, input.previous);
-  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult);
+  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult, input.currentResultsAvailable);
   else if (family(input.objective) === "traffic") score += scoreTraffic(signals, input.current, input.previous);
   if (input.current.frequency > FATIGUE_FREQUENCY_THRESHOLD) { score -= 15; addSignal(signals, "frequency_fatigue", "Exposición repetida", `La audiencia vio el anuncio ${input.current.frequency.toFixed(2)} veces en promedio.`, -15); }
   score = clampScore(score);
