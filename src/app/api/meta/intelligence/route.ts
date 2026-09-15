@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const decisionResult = await generateRealDecisions(accountId, { from, to });
+    const decisionResult = await generateRealDecisions(accountId, { from, to }, { targetCostPerResult: goals.targetCostPerResult });
     const suite = buildIntelligenceSuite(decisionResult.decisions, goals);
 
     let memory: MemoryStatus;
