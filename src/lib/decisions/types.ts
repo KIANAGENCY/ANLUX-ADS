@@ -38,8 +38,8 @@ export interface PerformanceDecision {
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
   /** True only when Meta returned the objective-specific primary result action. */
-  currentResultsAvailable: boolean;
-  previousResultsAvailable: boolean;
+  currentResultsAvailable?: boolean;
+  previousResultsAvailable?: boolean;
   generatedAt: string;
 }
 
