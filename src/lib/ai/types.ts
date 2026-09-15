@@ -1,10 +1,18 @@
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import type { PerformanceDecision } from "@/lib/decisions/types";
 
+export interface ResultAvailabilityByEntity {
+  campaigns: Record<string, boolean>;
+  adSets: Record<string, boolean>;
+  ads: Record<string, boolean>;
+}
+
 /**
  * Análisis de rendimiento sobre una cuenta concreta. Se construye en el
- * servidor (ver `app/api/ai/analyze/route.ts`) a partir de Meta Marketing
- * API: todas las cifras que llegan aquí son reales.
+ * servidor (ver `app/api/ai/analyze/route.ts`) a partir de Meta Marketing API.
+ * Las métricas numéricas son reales cuando Meta las proporciona; la
+ * disponibilidad explícita evita interpretar marcadores estructurales como
+ * ceros confirmados.
  */
 export interface AIPerformanceRequest {
   mode: "performance";
@@ -21,6 +29,8 @@ export interface AIPerformanceRequest {
   campaignMetrics: Record<string, PerformanceMetrics>;
   adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
+  /** Indica si Meta devolvió la acción primaria del objetivo para cada entidad. */
+  resultAvailability: ResultAvailabilityByEntity;
   /** Alertas deterministas calculadas por ANLUX sobre los mismos datos reales. */
   alerts: PerformanceAlert[];
   /** Decisiones del motor determinístico. El LLM las explica; no las sustituye ni ejecuta. */
