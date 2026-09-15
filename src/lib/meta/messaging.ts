@@ -58,6 +58,23 @@ export interface MessagingInsight {
   actions?: MessagingAction[];
 }
 
+/** Reemplaza un destino desconocido solo con metadata verificada del ad set/campaña. */
+export function applyInferredDestinations(
+  campaigns: CampaignMessaging[],
+  destinationByCampaign: Map<string, string>
+): CampaignMessaging[] {
+  return campaigns.map((campaign) => {
+    const inferred = destinationByCampaign.get(campaign.campaignId);
+    if (!inferred) return campaign;
+    return {
+      ...campaign,
+      details: campaign.details.map((detail) =>
+        detail.destination === "Destino no identificado" ? { ...detail, destination: inferred } : detail
+      ),
+    };
+  });
+}
+
 /** Only exact conversation events are grouped; totals never get added to their breakdown. */
 export function buildMessagingReport(
   totals: MessagingInsight[],

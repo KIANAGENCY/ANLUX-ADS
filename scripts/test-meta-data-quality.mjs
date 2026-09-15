@@ -61,10 +61,20 @@ async function testInsightIdentityAndPagination() {
   assert.ok(adFields.includes("adset_id"));
   assert.ok(adFields.includes("ad_id"));
 
-  const exactMessage = { actions: [{ action_type: "onsite_conversion.messaging_conversation_started_7d", value: "3" }] };
+  const conversation = { action_type: "onsite_conversion.messaging_conversation_started_7d", value: "11" };
+  const exactMessage = { actions: [conversation] };
   const connectionOnly = { actions: [{ action_type: "onsite_conversion.total_messaging_connection", value: "7" }] };
   assert.equal(insights.hasPrimaryResult(exactMessage, "MESSAGES"), true);
+  assert.equal(insights.hasPrimaryResult(exactMessage, "CONVERSIONS"), true, "OUTCOME_SALES may legitimately optimize for verified messaging conversations");
   assert.equal(insights.hasPrimaryResult(connectionOnly, "MESSAGES"), false, "messaging connections are not conversations");
+
+  const mapped = insights.mapInsightsRowToDailyMetrics({ spend: "305.87", actions: [conversation] }, "c1", "campaign", "CONVERSIONS", "2026-09-01");
+  assert.equal(mapped.results, 11, "sales/conversions campaign must propagate verified conversations as results when no purchase exists");
+  const primary = actions.getPrimaryResult([
+    { actionType: "onsite_conversion.messaging_conversation_started_7d", value: 11 },
+    { actionType: "purchase", value: 2 },
+  ], "CONVERSIONS");
+  assert.equal(primary, 2, "purchase must retain priority over messaging fallback");
 }
 
 function testDecisionMissingResultGuard() {
@@ -103,4 +113,4 @@ function testDecisionMissingResultGuard() {
 
 await testInsightIdentityAndPagination();
 testDecisionMissingResultGuard();
-console.log("Meta data-quality regression checks passed: entity ids, pagination, exact messaging result and missing-result guards.");
+console.log("Meta data-quality regression checks passed: entity ids, pagination, conversation fallback and missing-result guards.");

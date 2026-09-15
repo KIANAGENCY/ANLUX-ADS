@@ -1,6 +1,13 @@
 import "server-only";
 import { MetaApiError, metaGraphGet } from "./graph-client";
-import { buildMessagingReport, type MessagingInsight, type MessagingReport } from "../messaging";
+import { fetchRealAdSets } from "./adsets";
+import {
+  applyInferredDestinations,
+  buildMessagingReport,
+  destinationLabel,
+  type MessagingInsight,
+  type MessagingReport,
+} from "../messaging";
 
 interface Page<T> { data: T[]; paging?: { next?: string; cursors?: { after?: string } } }
 
@@ -21,6 +28,28 @@ async function allInsights(accountId: string, params: Record<string, string | nu
   throw new MetaApiError("empty_response", "El informe de conversaciones es demasiado grande. Reduce el rango de fechas.");
 }
 
+function inferDestinationByCampaign(adSets: Awaited<ReturnType<typeof fetchRealAdSets>>): Map<string, string> {
+  const candidates = new Map<string, Set<string>>();
+  for (const adSet of adSets) {
+    let destination: string | null = null;
+    if (adSet.whatsappDestination) destination = "WhatsApp";
+    else if (adSet.destinationType) {
+      const label = destinationLabel(adSet.destinationType);
+      if (label !== "Destino no identificado") destination = label;
+    }
+    if (!destination) continue;
+    const set = candidates.get(adSet.campaignId) ?? new Set<string>();
+    set.add(destination);
+    candidates.set(adSet.campaignId, set);
+  }
+
+  const result = new Map<string, string>();
+  for (const [campaignId, destinations] of candidates) {
+    if (destinations.size === 1) result.set(campaignId, [...destinations][0]);
+  }
+  return result;
+}
+
 export async function fetchMessagingReport(accountId: string, from: string, to: string): Promise<MessagingReport> {
   const params = {
     level: "campaign", fields: "campaign_id,campaign_name,actions",
@@ -28,7 +57,7 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
     use_unified_attribution_setting: "true",
   };
   // A breakdown failure must not erase the independent campaign totals.
-  const totals = await allInsights(accountId, params);
+  const [totals, adSets] = await Promise.all([allInsights(accountId, params), fetchRealAdSets(accountId)]);
   let breakdown: MessagingInsight[] = [];
   const warnings: string[] = [];
   try {
@@ -43,5 +72,8 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
       warnings.push("El destino tampoco está disponible para este periodo.");
     }
   }
-  return { campaigns: buildMessagingReport(totals, breakdown), warnings };
+
+  const inferredDestinations = inferDestinationByCampaign(adSets);
+  const campaigns = applyInferredDestinations(buildMessagingReport(totals, breakdown), inferredDestinations);
+  return { campaigns, warnings };
 }

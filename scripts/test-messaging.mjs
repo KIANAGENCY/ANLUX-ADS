@@ -19,7 +19,7 @@ function load(file, imports = {}) {
   return loadedModule.exports;
 }
 const logic = load('src/lib/meta/messaging.ts');
-const { CONVERSATION_ACTION: event, conversationCount, buildMessagingReport } = logic;
+const { CONVERSATION_ACTION: event, conversationCount, buildMessagingReport, applyInferredDestinations } = logic;
 const action = (value, destination) => ({ action_type: event, value, action_destination: destination });
 assert.equal(conversationCount(undefined), null);
 assert.equal(conversationCount([]), null);
@@ -38,13 +38,19 @@ assert.equal(report[0].details[1].source, 'Instagram');
 assert.equal(report[1].conversations, null);
 report = buildMessagingReport(totals, [{ campaign_id: 'c1', actions: [action('12', 'unknown')] }]);
 assert.equal(report[0].details[0].destination, 'Destino no identificado');
-assert.equal(report[0].details[0].source, 'Origen no desglosado');
+report = applyInferredDestinations(report, new Map([['c1', 'WhatsApp']]));
+assert.equal(report[0].details[0].destination, 'WhatsApp');
 assert.throws(() => buildMessagingReport([totals[0], totals[0]], []));
 assert.throws(() => buildMessagingReport([{}], []));
 assert.equal(buildMessagingReport(totals, [details[0]])[0].conversations, 12, 'Partial breakdown does not replace total');
 
 class MetaApiError extends Error { constructor(kind, message) { super(message); this.kind = kind; } }
-const createService = get => load('src/lib/meta/real/messaging.ts', { '../messaging': logic, './graph-client': { metaGraphGet: get, MetaApiError } });
+const adSets = [{ campaignId: 'c1', whatsappDestination: true, destinationType: 'WHATSAPP' }];
+const createService = get => load('src/lib/meta/real/messaging.ts', {
+  '../messaging': logic,
+  './graph-client': { metaGraphGet: get, MetaApiError },
+  './adsets': { fetchRealAdSets: async () => adSets },
+});
 async function main() {
   const requests = [];
   let count = 0;
@@ -63,11 +69,11 @@ async function main() {
   assert.ok(requests.every(r => r.params.time_range === '{"since":"2026-09-01","until":"2026-09-15"}'));
   const fallback = createService(async (_, params) => {
     if (params.breakdowns) throw Error('Unsupported combination');
-    return { data: params.action_breakdowns ? [{ campaign_id: 'c1', actions: [action('12', 'whatsapp')] }] : totals };
+    return { data: params.action_breakdowns ? [{ campaign_id: 'c1', actions: [action('12')] }] : totals };
   });
   const fallbackReport = await fallback.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
   assert.equal(fallbackReport.campaigns[0].conversations, 12);
-  assert.equal(fallbackReport.campaigns[0].details[0].source, 'Origen no desglosado');
+  assert.equal(fallbackReport.campaigns[0].details[0].destination, 'WhatsApp');
   assert.equal(fallbackReport.warnings.length, 1);
   const noDetails = createService(async (_, params) => { if (params.action_breakdowns) throw Error('secret must not be exposed'); return { data: totals }; });
   const noDetailsReport = await noDetails.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
@@ -78,7 +84,6 @@ async function main() {
   await assert.rejects(() => failedTotals.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15'), /No access/);
   const loop = createService(async () => ({ data: [], paging: { next: 'next', cursors: { after: 'same' } } }));
   await assert.rejects(() => loop.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15'), /páginas/);
-  console.log('Messaging regression checks passed: counts, unknown data, attribution, grouping, pagination, fallbacks and errors.');
+  console.log('Messaging regression checks passed: counts, inferred destination, attribution, grouping, pagination, fallbacks and errors.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-
