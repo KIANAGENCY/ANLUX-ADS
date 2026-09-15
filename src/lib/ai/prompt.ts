@@ -15,6 +15,9 @@ Trabajas en dos modos, indicados por el campo "modo" del mensaje del usuario:
 
 MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, moneda cuando está disponible, periodo, métricas de cuenta, campañas, conjuntos de anuncios, anuncios destacados, alertas y decisiones deterministas de ANLUX):
 - Basa cada afirmación únicamente en esos datos estructurados. Nunca inventes cifras, nombres de campaña ni resultados que no aparezcan ahí.
+- Cada entidad incluye "resultados_disponibles". Si es false, el campo numérico "results" de esa entidad es solo un marcador estructural: NO significa cero resultados. Nunca digas "0 mensajes", "0 conversaciones", "0 leads", "0 ventas" ni "sin resultados" basándote en ese valor. Di que Meta no devolvió la métrica primaria para ese objetivo.
+- Si "resultados_cuenta_completos" es false, tampoco interpretes el total de resultados de cuenta como completo ni concluyas que la cuenta tuvo cero resultados. Puedes analizar gasto, impresiones, reach, clics, CTR, CPC y otras métricas disponibles.
+- Para campañas con objetivo MESSAGES, el resultado válido representa conversaciones iniciadas mediante la acción específica de Meta; no confundas conexiones de mensajería, clics o contactos con conversaciones.
 - Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta". Si "moneda_cuenta" es null, no asumas ninguna moneda ni presentes un símbolo monetario inventado.
 - Las "alertas_anlux" son hallazgos calculados por reglas deterministas sobre los mismos datos reales.
 - Las "decisiones_anlux" son la salida del Decision Engine determinístico. Trátalas como la fuente de verdad para la acción recomendada (escalar, mantener, observar, reducir, candidato a pausa, renovar creativo, revisar audiencia o esperar más datos). Tu función es explicar por qué la decisión tiene sentido, conectar la evidencia y señalar sus riesgos; no reemplaces una decisión determinística por una acción contraria inventada.
@@ -53,6 +56,12 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
   const topCampaigns = topBySpend(request.campaigns, request.campaignMetrics, MAX_ENTITIES);
   const topAdSets = topBySpend(request.adSets, request.adSetMetrics, MAX_ENTITIES);
   const topAds = topBySpend(request.ads, request.adMetrics, MAX_ENTITIES);
+  const activeCampaignsWithData = request.campaigns.filter(
+    (campaign) => campaign.status !== "ARCHIVED" && hasActivity(request.campaignMetrics[campaign.id])
+  );
+  const accountResultsComplete = activeCampaignsWithData.every(
+    (campaign) => request.resultAvailability.campaigns[campaign.id] === true
+  );
 
   return {
     modo: "performance",
@@ -60,6 +69,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
     industria: request.client.industry,
     moneda_cuenta: request.currency,
     periodo: request.dateRange,
+    resultados_cuenta_completos: accountResultsComplete,
     metricas_cuenta_periodo_actual: request.currentMetrics,
     metricas_cuenta_periodo_anterior: request.previousMetrics,
     decisiones_anlux: request.decisions.slice(0, MAX_DECISIONS).map((decision) => ({
@@ -72,6 +82,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       score: decision.score,
       confianza: decision.confidence,
       riesgo: decision.risk,
+      resultados_disponibles: decision.currentResultsAvailable ?? true,
       cambio_sugerido_porcentaje: decision.suggestedChangePercent,
       razon: decision.rationale,
       señales: decision.signals.slice(0, 4).map((signal) => ({
@@ -95,6 +106,7 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       estado: c.status,
       objetivo: c.objective,
       fecha_inicio: c.startDate ?? null,
+      resultados_disponibles: request.resultAvailability.campaigns[c.id] === true,
       metricas: request.campaignMetrics[c.id],
     })),
     conjuntos_de_anuncios_destacados: topAdSets.map((a) => ({
@@ -104,12 +116,14 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
       estado: a.status,
       objetivo_optimizacion: a.optimizationGoal,
       fecha_inicio: a.startDate ?? null,
+      resultados_disponibles: request.resultAvailability.adSets[a.id] === true,
       metricas: request.adSetMetrics[a.id],
     })),
     anuncios_destacados: topAds.map((a) => ({
       id: a.id,
       nombre: a.name,
       estado: a.status,
+      resultados_disponibles: request.resultAvailability.ads[a.id] === true,
       metricas: request.adMetrics[a.id],
     })),
     campañas_totales_en_la_cuenta: request.campaigns.length,
