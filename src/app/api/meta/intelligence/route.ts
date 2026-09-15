@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     try {
       memory = await persistIntelligenceMemory(decisionResult, suite, goals);
     } catch (error) {
+      console.error("No se pudo persistir la memoria histórica de ANLUX.", error);
       memory = {
         state: "unavailable",
         enabled: true,
