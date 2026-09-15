@@ -12,6 +12,8 @@ interface RawAdSet {
   daily_budget?: string;
   lifetime_budget?: string;
   optimization_goal?: string;
+  destination_type?: string;
+  promoted_object?: { whatsapp_phone_number?: string };
   start_time?: string;
   campaign?: { name?: string; objective?: string };
 }
@@ -24,6 +26,9 @@ export interface RealAdSet extends AdSet {
   campaignName: string;
   /** Objetivo de la campaña propietaria — necesario para interpretar `actions` en insights.ts. No se expone en la UI directamente. */
   campaignObjective: CampaignObjective;
+  /** Metadata de entrega devuelta por Meta, conservada para diagnosticar campañas de mensajería. */
+  destinationType?: string;
+  whatsappDestination: boolean;
 }
 
 function toDateOnly(value?: string): string | undefined {
@@ -35,7 +40,7 @@ function toDateOnly(value?: string): string | undefined {
 export async function fetchRealAdSets(adAccountId: string): Promise<RealAdSet[]> {
   const res = await metaGraphGet<AdSetsResponse>(`/${adAccountId}/adsets`, {
     fields:
-      "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,start_time,campaign{name,objective}",
+      "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,destination_type,promoted_object,start_time,campaign{name,objective}",
     limit: 500,
   });
 
@@ -52,5 +57,8 @@ export async function fetchRealAdSets(adAccountId: string): Promise<RealAdSet[]>
     startDate: toDateOnly(a.start_time),
     campaignName: a.campaign?.name ?? "—",
     campaignObjective: mapObjective(a.campaign?.objective),
+    destinationType: a.destination_type,
+    whatsappDestination:
+      a.destination_type?.toUpperCase() === "WHATSAPP" || Boolean(a.promoted_object?.whatsapp_phone_number),
   }));
 }
