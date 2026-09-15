@@ -26,7 +26,7 @@ export default function AlertsPage() {
 
       {error && <ErrorBanner message={error} />}
 
-      {loading ? (
+      {error ? null : loading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full rounded-xl" />
@@ -35,8 +35,8 @@ export default function AlertsPage() {
       ) : alerts.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}
-          title="Todo en orden"
-          description="No se detectaron alertas de performance en el periodo seleccionado."
+          title="Sin alertas detectadas"
+          description="No se detectaron alertas con los datos disponibles para el periodo seleccionado."
         />
       ) : (
         <div className="space-y-3">

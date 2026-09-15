@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
-import { evaluateDecision } from "@/lib/decisions/engine";
+import { evaluateDecisionSafely } from "@/lib/decisions/safe-evaluate";
 import type { PerformanceDecision } from "@/lib/decisions/types";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
-import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import { fetchAccountRangeMetrics } from "@/lib/meta/real/overview";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
+import type { ResultAvailabilityByEntity } from "@/lib/ai/types";
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
@@ -83,6 +84,7 @@ interface GatheredData {
   campaignMetrics: Record<string, PerformanceMetrics>;
   adSetMetrics: Record<string, PerformanceMetrics>;
   adMetrics: Record<string, PerformanceMetrics>;
+  resultAvailability: ResultAvailabilityByEntity;
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
   alerts: PerformanceAlert[];
@@ -90,6 +92,10 @@ interface GatheredData {
 }
 
 const META_ACCOUNT_COLOR = "#1877F2";
+
+function emptyAvailability(): ResultAvailabilityByEntity {
+  return { campaigns: {}, adSets: {}, ads: {} };
+}
 
 async function gatherAccountData(accountId: string, dateRange: DateRange): Promise<GatheredData> {
   const previousRange = getPreviousPeriod(dateRange);
@@ -117,6 +123,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       campaignMetrics: {},
       adSetMetrics: {},
       adMetrics: {},
+      resultAvailability: emptyAvailability(),
       currentMetrics: aggregateMetrics([]),
       previousMetrics: aggregateMetrics([]),
       alerts: [],
@@ -133,17 +140,23 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   const campaignMetrics: Record<string, PerformanceMetrics> = {};
   const previousCampaignMetrics: Record<string, PerformanceMetrics> = {};
+  const campaignResultAvailability: Record<string, boolean> = {};
+  const previousCampaignResultAvailability: Record<string, boolean> = {};
   for (const campaign of campaigns) {
     const currentRow = currentInsights.get(campaign.id);
     campaignMetrics[campaign.id] = aggregateMetrics(
       currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, dateRange.from)] : []
     );
+    campaignResultAvailability[campaign.id] = Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective));
 
     const previousRow = previousInsights.get(campaign.id);
     previousCampaignMetrics[campaign.id] = aggregateMetrics(
       previousRow
         ? [mapInsightsRowToDailyMetrics(previousRow, campaign.id, "campaign", campaign.objective, previousRange.from)]
         : []
+    );
+    previousCampaignResultAvailability[campaign.id] = Boolean(
+      previousRow && hasPrimaryResult(previousRow, campaign.objective)
     );
   }
 
@@ -157,6 +170,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       campaignMetrics,
       adSetMetrics: {},
       adMetrics: {},
+      resultAvailability: { campaigns: campaignResultAvailability, adSets: {}, ads: {} },
       currentMetrics,
       previousMetrics,
       alerts: [],
@@ -175,38 +189,51 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   const adSetMetrics: Record<string, PerformanceMetrics> = {};
   const previousAdSetMetrics: Record<string, PerformanceMetrics> = {};
+  const adSetResultAvailability: Record<string, boolean> = {};
+  const previousAdSetResultAvailability: Record<string, boolean> = {};
   for (const adSet of adSets) {
     const row = adSetInsights.get(adSet.id);
     adSetMetrics[adSet.id] = aggregateMetrics(
       row ? [mapInsightsRowToDailyMetrics(row, adSet.id, "adset", adSet.campaignObjective, dateRange.from)] : []
     );
+    adSetResultAvailability[adSet.id] = Boolean(row && hasPrimaryResult(row, adSet.campaignObjective));
+
     const previousRow = previousAdSetInsights.get(adSet.id);
     previousAdSetMetrics[adSet.id] = aggregateMetrics(
       previousRow
         ? [mapInsightsRowToDailyMetrics(previousRow, adSet.id, "adset", adSet.campaignObjective, previousRange.from)]
         : []
     );
+    previousAdSetResultAvailability[adSet.id] = Boolean(
+      previousRow && hasPrimaryResult(previousRow, adSet.campaignObjective)
+    );
   }
 
   const adMetrics: Record<string, PerformanceMetrics> = {};
   const previousAdMetrics: Record<string, PerformanceMetrics> = {};
+  const adResultAvailability: Record<string, boolean> = {};
+  const previousAdResultAvailability: Record<string, boolean> = {};
   for (const ad of ads) {
     const row = adInsights.get(ad.id);
     adMetrics[ad.id] = aggregateMetrics(
       row ? [mapInsightsRowToDailyMetrics(row, ad.id, "ad", ad.campaignObjective, dateRange.from)] : []
     );
+    adResultAvailability[ad.id] = Boolean(row && hasPrimaryResult(row, ad.campaignObjective));
+
     const previousRow = previousAdInsights.get(ad.id);
     previousAdMetrics[ad.id] = aggregateMetrics(
       previousRow
         ? [mapInsightsRowToDailyMetrics(previousRow, ad.id, "ad", ad.campaignObjective, previousRange.from)]
         : []
     );
+    previousAdResultAvailability[ad.id] = Boolean(previousRow && hasPrimaryResult(previousRow, ad.campaignObjective));
   }
 
   const alerts = buildRealAlertsFromMetrics({
     campaigns,
     currentCampaignMetrics: campaignMetrics,
     previousCampaignMetrics,
+    currentResultAvailability: campaignResultAvailability,
     adSets,
     adSetMetrics,
     currency,
@@ -216,7 +243,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
   for (const campaign of campaigns) {
     if (campaign.status !== "ACTIVE" || !hasActivity(campaignMetrics[campaign.id] ?? aggregateMetrics([]))) continue;
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "campaign",
         entityId: campaign.id,
         entityName: campaign.name,
@@ -225,6 +252,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         objective: campaign.objective,
         current: campaignMetrics[campaign.id],
         previous: previousCampaignMetrics[campaign.id],
+        currentResultsAvailable: campaignResultAvailability[campaign.id],
+        previousResultsAvailable: previousCampaignResultAvailability[campaign.id],
       })
     );
   }
@@ -233,7 +262,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     const current = adSetMetrics[adSet.id];
     if (adSet.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "adset",
         entityId: adSet.id,
         entityName: adSet.name,
@@ -242,6 +271,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         objective: adSet.campaignObjective,
         current,
         previous: previousAdSetMetrics[adSet.id] ?? aggregateMetrics([]),
+        currentResultsAvailable: adSetResultAvailability[adSet.id],
+        previousResultsAvailable: previousAdSetResultAvailability[adSet.id],
       })
     );
   }
@@ -250,7 +281,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     const current = adMetrics[ad.id];
     if (ad.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "ad",
         entityId: ad.id,
         entityName: ad.name,
@@ -259,6 +290,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         objective: ad.campaignObjective,
         current,
         previous: previousAdMetrics[ad.id] ?? aggregateMetrics([]),
+        currentResultsAvailable: adResultAvailability[ad.id],
+        previousResultsAvailable: previousAdResultAvailability[ad.id],
       })
     );
   }
@@ -272,6 +305,11 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     campaignMetrics,
     adSetMetrics,
     adMetrics,
+    resultAvailability: {
+      campaigns: campaignResultAvailability,
+      adSets: adSetResultAvailability,
+      ads: adResultAvailability,
+    },
     currentMetrics,
     previousMetrics,
     alerts,
@@ -372,6 +410,7 @@ export async function POST(req: NextRequest) {
       campaignMetrics: data.campaignMetrics,
       adSetMetrics: data.adSetMetrics,
       adMetrics: data.adMetrics,
+      resultAvailability: data.resultAvailability,
       alerts: data.alerts,
       decisions: data.decisions,
       question: question?.trim() || undefined,

@@ -37,6 +37,9 @@ export interface PerformanceDecision {
   signals: DecisionSignal[];
   currentMetrics: PerformanceMetrics;
   previousMetrics: PerformanceMetrics;
+  /** True only when Meta returned the objective-specific primary result action. */
+  currentResultsAvailable?: boolean;
+  previousResultsAvailable?: boolean;
   generatedAt: string;
 }
 
@@ -72,4 +75,10 @@ export interface DecisionEntityInput {
   objective: CampaignObjective;
   current: PerformanceMetrics;
   previous: PerformanceMetrics;
+  /**
+   * `false` means the numeric `results` field is only a structural placeholder;
+   * it must never be interpreted as a confirmed zero-result outcome.
+   */
+  currentResultsAvailable?: boolean;
+  previousResultsAvailable?: boolean;
 }

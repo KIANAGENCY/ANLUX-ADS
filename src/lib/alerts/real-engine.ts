@@ -2,7 +2,7 @@ import "server-only";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
-import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import type { AdSet, AlertSeverity, Campaign, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { formatCurrency } from "@/lib/utils/format";
@@ -37,13 +37,14 @@ function pushAlert(
   });
 }
 
-/** Reglas de negocio sobre campañas: CTR, CPC y gasto sin resultados cuando el objetivo es conocido. */
+/** Reglas de negocio sobre campañas: CTR, CPC y gasto sin resultados cuando el resultado está realmente disponible. */
 function applyCampaignRules(
   alerts: PerformanceAlert[],
   campaign: Pick<Campaign, "id" | "name" | "objective">,
   current: PerformanceMetrics,
   previous: PerformanceMetrics,
-  currency: string | null
+  currency: string | null,
+  resultsAvailable: boolean
 ) {
   if (previous.ctr > 0 && current.ctr > 0) {
     const ctrChange = ((current.ctr - previous.ctr) / previous.ctr) * 100;
@@ -99,9 +100,23 @@ function applyCampaignRules(
     }
   }
 
-  // Con objetivo UNKNOWN no podemos saber qué action_type representa el resultado,
-  // así que una ausencia de "results" no demuestra que haya gasto sin resultado.
-  const canEvaluateResults = campaign.objective !== "UNKNOWN";
+  const hasActivity = current.spend > 0 || current.impressions > 0 || current.clicks > 0;
+  if (campaign.objective !== "UNKNOWN" && hasActivity && !resultsAvailable) {
+    pushAlert(
+      alerts,
+      "info",
+      "Resultados no disponibles",
+      `Meta devolvió actividad de "${campaign.name}", pero no la acción primaria correspondiente a su objetivo. ANLUX no interpreta ese dato ausente como cero y bloquea conclusiones de gasto sin resultados.`,
+      "campaign",
+      campaign.name,
+      undefined,
+      campaign.id
+    );
+    return;
+  }
+
+  // Con objetivo UNKNOWN no podemos saber qué action_type representa el resultado.
+  const canEvaluateResults = campaign.objective !== "UNKNOWN" && resultsAvailable;
   if (
     canEvaluateResults &&
     current.spend > 5 &&
@@ -112,7 +127,7 @@ function applyCampaignRules(
       alerts,
       "critical",
       "Gasto sin resultados",
-      `"${campaign.name}" invirtió ${formatCurrency(current.spend, currency)} en el periodo sin generar ningún resultado.`,
+      `"${campaign.name}" invirtió ${formatCurrency(current.spend, currency)} en el periodo sin generar ningún resultado confirmado por Meta.`,
       "campaign",
       campaign.name,
       "results",
@@ -137,13 +152,13 @@ function applyCampaignRules(
   }
 }
 
-/** Regla sobre costo por resultado. Solo usa gasto/resultados, ambas métricas aditivas. */
+/** Regla sobre costo por resultado. Solo usa campañas cuya acción primaria fue devuelta por Meta. */
 function applyCostPerResultOutlierRule(
   alerts: PerformanceAlert[],
-  campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[],
+  campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics; resultsAvailable: boolean }[],
   currency: string | null
 ) {
-  const withResults = campaignMetrics.filter((c) => c.current.results > 0);
+  const withResults = campaignMetrics.filter((c) => c.resultsAvailable && c.current.results > 0);
   if (withResults.length <= 1) return;
 
   const totals = withResults.reduce(
@@ -182,6 +197,7 @@ export interface RealAlertEvaluationInput {
   campaigns: Campaign[];
   currentCampaignMetrics: Record<string, PerformanceMetrics>;
   previousCampaignMetrics: Record<string, PerformanceMetrics>;
+  currentResultAvailability?: Record<string, boolean>;
   adSets: AdSet[];
   adSetMetrics: Record<string, PerformanceMetrics>;
   currency: string | null;
@@ -191,13 +207,14 @@ export interface RealAlertEvaluationInput {
 export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): PerformanceAlert[] {
   const alerts: PerformanceAlert[] = [];
   const activeCampaigns = input.campaigns.filter((c) => c.status !== "ARCHIVED");
-  const campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics }[] = [];
+  const campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics; resultsAvailable: boolean }[] = [];
 
   for (const campaign of activeCampaigns) {
     const current = input.currentCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
     const previous = input.previousCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
-    campaignMetrics.push({ campaignId: campaign.id, name: campaign.name, current });
-    applyCampaignRules(alerts, campaign, current, previous, input.currency);
+    const resultsAvailable = input.currentResultAvailability?.[campaign.id] ?? true;
+    campaignMetrics.push({ campaignId: campaign.id, name: campaign.name, current, resultsAvailable });
+    applyCampaignRules(alerts, campaign, current, previous, input.currency, resultsAvailable);
   }
 
   applyCostPerResultOutlierRule(alerts, campaignMetrics, input.currency);
@@ -245,12 +262,14 @@ export async function generateRealAlerts(accountId: string, range: DateRange): P
 
   const currentCampaignMetrics: Record<string, PerformanceMetrics> = {};
   const previousCampaignMetrics: Record<string, PerformanceMetrics> = {};
+  const currentResultAvailability: Record<string, boolean> = {};
 
   for (const campaign of activeCampaigns) {
     const currentRow = currentInsights.get(campaign.id);
     currentCampaignMetrics[campaign.id] = aggregateMetrics(
       currentRow ? [mapInsightsRowToDailyMetrics(currentRow, campaign.id, "campaign", campaign.objective, range.from)] : []
     );
+    currentResultAvailability[campaign.id] = Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective));
 
     const previousRow = previousInsights.get(campaign.id);
     previousCampaignMetrics[campaign.id] = aggregateMetrics(
@@ -273,6 +292,7 @@ export async function generateRealAlerts(accountId: string, range: DateRange): P
     campaigns: activeCampaigns,
     currentCampaignMetrics,
     previousCampaignMetrics,
+    currentResultAvailability,
     adSets,
     adSetMetrics,
     currency,

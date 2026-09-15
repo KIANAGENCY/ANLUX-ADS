@@ -28,13 +28,13 @@ export function parseActionsArray(raw: RawActionItem[] | undefined): ActionBreak
 /**
  * Acción primaria por objetivo. UNKNOWN deliberadamente no tiene candidatos:
  * si el objetivo no se conoce, no se interpreta una acción arbitraria como resultado.
+ *
+ * Para MESSAGES solo contamos conversaciones iniciadas. "total_messaging_connection"
+ * describe una señal distinta y no debe presentarse como conversación/mensaje real.
  */
 const PRIMARY_ACTION_TYPES_BY_OBJECTIVE: Record<CampaignObjective, string[]> = {
   LEAD_GENERATION: ["lead", "onsite_conversion.lead_grouped"],
-  MESSAGES: [
-    "onsite_conversion.messaging_conversation_started_7d",
-    "onsite_conversion.total_messaging_connection",
-  ],
+  MESSAGES: ["onsite_conversion.messaging_conversation_started_7d"],
   CONVERSIONS: ["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"],
   SALES: ["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"],
   TRAFFIC: ["link_click"],

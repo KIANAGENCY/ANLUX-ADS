@@ -42,7 +42,7 @@ export default function DecisionsPage() {
 
       {error && <ErrorBanner message={error} />}
 
-      {loading ? (
+      {error ? null : loading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-52 w-full rounded-xl" />
@@ -51,8 +51,8 @@ export default function DecisionsPage() {
       ) : !result || result.decisions.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}
-          title="No hay decisiones pendientes"
-          description="No se detectó actividad suficiente en el periodo seleccionado para emitir recomendaciones."
+          title="Sin recomendaciones para este periodo"
+          description="No hay actividad evaluable suficiente con los datos disponibles para emitir una recomendación responsable."
         />
       ) : (
         <div className="space-y-3">
