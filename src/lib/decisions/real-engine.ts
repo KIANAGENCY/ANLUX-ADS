@@ -70,7 +70,7 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
  * Genera recomendaciones determinísticas usando exclusivamente datos reales de Meta.
  * No existe ninguna llamada de escritura ni al Marketing API ni a un proveedor de IA.
  */
-export async function generateRealDecisions(accountId: string, range: DateRange): Promise<DecisionEngineResult> {
+export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
   const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows] =
@@ -111,6 +111,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, campaign.objective)),
+        startDate: campaign.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
       })
     );
   }
@@ -137,6 +139,10 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
+        startDate: campaign?.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
+        startDate: adSet.startDate ?? campaign?.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
       })
     );
   }
