@@ -75,10 +75,15 @@ export interface DecisionEntityInput {
   objective: CampaignObjective;
   current: PerformanceMetrics;
   previous: PerformanceMetrics;
-  /**
-   * `false` means the numeric `results` field is only a structural placeholder;
-   * it must never be interpreted as a confirmed zero-result outcome.
-   */
+  /** False means results is structural only and must never be read as a zero. */
   currentResultsAvailable?: boolean;
   previousResultsAvailable?: boolean;
+  /** Start date supplied by Meta for the parent campaign or the entity itself. */
+  startDate?: string | null;
+  /** A human-confirmed target; never an unconfirmed automatic proposal. */
+  targetCostPerResult?: number | null;
+  /** Typical confirmed account cost when historical memory is available. */
+  typicalCostPerResult?: number | null;
+  /** Account comparison value, present only when it comes from real account data. */
+  accountAverageCpc?: number | null;
 }
