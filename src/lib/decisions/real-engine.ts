@@ -3,11 +3,11 @@ import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
-import { fetchAggregatedInsightsByEntity, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import type { CampaignObjective, DateRange, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
-import { evaluateDecision } from "./engine";
+import { evaluateDecisionSafely } from "./safe-evaluate";
 import type { DecisionEngineResult, DecisionEngineSummary, PerformanceDecision } from "./types";
 
 function emptyMetrics(): PerformanceMetrics {
@@ -93,18 +93,14 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
 
   for (const campaign of campaigns) {
     if (campaign.status !== "ACTIVE") continue;
-    const current = metricsFromRow(currentCampaignRows.get(campaign.id), campaign.id, "campaign", campaign.objective, range.from);
+    const currentRow = currentCampaignRows.get(campaign.id);
+    const previousRow = previousCampaignRows.get(campaign.id);
+    const current = metricsFromRow(currentRow, campaign.id, "campaign", campaign.objective, range.from);
     if (!hasCurrentActivity(current)) continue;
-    const previousMetrics = metricsFromRow(
-      previousCampaignRows.get(campaign.id),
-      campaign.id,
-      "campaign",
-      campaign.objective,
-      previous.from
-    );
+    const previousMetrics = metricsFromRow(previousRow, campaign.id, "campaign", campaign.objective, previous.from);
 
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "campaign",
         entityId: campaign.id,
         entityName: campaign.name,
@@ -113,6 +109,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         objective: campaign.objective,
         current,
         previous: previousMetrics,
+        currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective)),
+        previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, campaign.objective)),
       })
     );
   }
@@ -121,12 +119,14 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
     if (adSet.status !== "ACTIVE") continue;
     const campaign = campaignById.get(adSet.campaignId);
     const objective = adSet.campaignObjective ?? campaign?.objective ?? "UNKNOWN";
-    const current = metricsFromRow(currentAdSetRows.get(adSet.id), adSet.id, "adset", objective, range.from);
+    const currentRow = currentAdSetRows.get(adSet.id);
+    const previousRow = previousAdSetRows.get(adSet.id);
+    const current = metricsFromRow(currentRow, adSet.id, "adset", objective, range.from);
     if (!hasCurrentActivity(current)) continue;
-    const previousMetrics = metricsFromRow(previousAdSetRows.get(adSet.id), adSet.id, "adset", objective, previous.from);
+    const previousMetrics = metricsFromRow(previousRow, adSet.id, "adset", objective, previous.from);
 
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "adset",
         entityId: adSet.id,
         entityName: adSet.name,
@@ -135,6 +135,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         objective,
         current,
         previous: previousMetrics,
+        currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
+        previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
       })
     );
   }
@@ -143,12 +145,14 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
     if (ad.status !== "ACTIVE") continue;
     const campaign = campaignById.get(ad.campaignId);
     const objective = ad.campaignObjective ?? campaign?.objective ?? "UNKNOWN";
-    const current = metricsFromRow(currentAdRows.get(ad.id), ad.id, "ad", objective, range.from);
+    const currentRow = currentAdRows.get(ad.id);
+    const previousRow = previousAdRows.get(ad.id);
+    const current = metricsFromRow(currentRow, ad.id, "ad", objective, range.from);
     if (!hasCurrentActivity(current)) continue;
-    const previousMetrics = metricsFromRow(previousAdRows.get(ad.id), ad.id, "ad", objective, previous.from);
+    const previousMetrics = metricsFromRow(previousRow, ad.id, "ad", objective, previous.from);
 
     decisions.push(
-      evaluateDecision({
+      evaluateDecisionSafely({
         entityType: "ad",
         entityId: ad.id,
         entityName: ad.name,
@@ -157,6 +161,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         objective,
         current,
         previous: previousMetrics,
+        currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
+        previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
       })
     );
   }
