@@ -79,6 +79,10 @@ function deriveAction(input: DecisionEntityInput, score: number, level: Decision
   if (!hasEvidence(input.objective, input.current)) return "INSUFFICIENT_DATA";
   if (days !== null && days < MIN_LEARNING_DAYS) return "INSUFFICIENT_DATA";
 
+  const ctrChange = percentChange(input.current.ctr, input.previous.ctr);
+  const cpcChange = percentChange(input.current.cpc, input.previous.cpc);
+  if (input.entityType === "ad" && input.current.impressions >= 1_500 &&
+    ((ctrChange !== null && ctrChange <= -25) || (cpcChange !== null && cpcChange >= 35))) return "REFRESH_CREATIVE";
   if (input.current.frequency > FATIGUE_FREQUENCY_THRESHOLD) return "REFRESH_CREATIVE";
   if (input.accountAverageCpc != null && input.accountAverageCpc > 0 && input.current.cpc >= input.accountAverageCpc * CPC_ACCOUNT_MULTIPLIER) return "REVIEW_AUDIENCE";
 
