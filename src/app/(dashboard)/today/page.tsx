@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { CircleAlert, CircleCheck, CircleHelp, CircleStop, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -22,6 +23,24 @@ const PRESENTATION: Record<DecisionAction, { label: string; className: string; I
 export default function TodayPage() {
   const { loading, result, error } = useDecisions();
   const campaigns = result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [];
+  const [quality, setQuality] = useState<Record<string, string>>({});
+  const [savingCampaign, setSavingCampaign] = useState<string | null>(null);
+
+  async function saveQuality(campaignId: string) {
+    const value = Number(quality[campaignId]);
+    if (!result || !Number.isFinite(value) || value < 0) return;
+    setSavingCampaign(campaignId);
+    try {
+      const response = await fetch("/api/meta/quality", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: result.accountId, campaignId, periodTo: result.to, qualifiedConversations: value }),
+      });
+      if (!response.ok) throw new Error("No se pudo guardar.");
+    } finally {
+      setSavingCampaign(null);
+    }
+  }
 
   return (
     <main className="mx-auto max-w-3xl space-y-4">
@@ -51,6 +70,32 @@ export default function TodayPage() {
                   </span>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-muted-foreground">{decision.rationale}</p>
+                {decision.currentResultsAvailable === true && (
+                  <form
+                    className="mt-4 rounded-xl border border-border-subtle bg-surface-2/50 p-3"
+                    onSubmit={(event) => { event.preventDefault(); void saveQuality(decision.campaignId); }}
+                  >
+                    <label htmlFor={`quality-${decision.campaignId}`} className="block text-xs font-semibold text-foreground">
+                      ¿Cuántas de las {decision.currentMetrics.results} conversaciones valieron la pena?
+                    </label>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        id={`quality-${decision.campaignId}`}
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        value={quality[decision.campaignId] ?? ""}
+                        onChange={(event) => setQuality((current) => ({ ...current, [decision.campaignId]: event.target.value }))}
+                        className="min-h-11 w-20 rounded-lg border border-border-subtle bg-background px-3 text-sm text-foreground"
+                        aria-label="Conversaciones que valieron la pena"
+                      />
+                      <button type="submit" disabled={savingCampaign === decision.campaignId} className="min-h-11 rounded-lg bg-surface px-3 text-sm font-semibold text-foreground disabled:opacity-60">
+                        {savingCampaign === decision.campaignId ? "Guardando…" : "Guardar"}
+                      </button>
+                    </div>
+                  </form>
+                )}
                 <Link href="/decisions" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-accent-light hover:bg-surface-2">
                   Ver detalle <ChevronRight className="size-4" aria-hidden />
                 </Link>
