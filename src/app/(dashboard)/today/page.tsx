@@ -33,6 +33,7 @@ function fallbackNarrative(decision: PerformanceDecision): string {
 export default function TodayPage() {
   const { loading, result, error } = useIntelligence();
   const { clientId, dateRange } = useFilters();
+  const { from, to } = dateRange;
   const campaigns = useMemo(
     () => result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [],
     [result]
@@ -53,7 +54,6 @@ export default function TodayPage() {
 
   useEffect(() => {
     if (!result || campaigns.length === 0) {
-      setNarratives({});
       return;
     }
     let cancelled = false;
@@ -65,7 +65,7 @@ export default function TodayPage() {
           body: JSON.stringify({
             mode: "performance",
             clientId,
-            dateRange,
+            dateRange: { from, to },
             question: `Escribe una frase para la pantalla principal, solamente sobre la campaña \"${decision.entityName}\". Explica qué hacer hoy sin jerga ni siglas.`,
           }),
         });
@@ -79,7 +79,7 @@ export default function TodayPage() {
       if (!cancelled) setNarratives(Object.fromEntries(entries));
     });
     return () => { cancelled = true; };
-  }, [result, campaigns, clientId, dateRange.from, dateRange.to]);
+  }, [result, campaigns, clientId, from, to]);
 
   async function confirmTarget() {
     if (!result || !proposal) return;
@@ -104,7 +104,7 @@ export default function TodayPage() {
       const response = await fetch("/api/meta/quality", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: clientId, campaignId, periodTo: dateRange.to, qualifiedConversations: value }),
+        body: JSON.stringify({ accountId: clientId, campaignId, periodTo: to, qualifiedConversations: value }),
       });
       if (!response.ok) throw new Error("No se pudo guardar.");
     } finally {
