@@ -139,8 +139,6 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
-        startDate: campaign?.startDate ?? null,
-        targetCostPerResult: options?.targetCostPerResult ?? null,
         startDate: adSet.startDate ?? campaign?.startDate ?? null,
         targetCostPerResult: options?.targetCostPerResult ?? null,
       })
@@ -169,6 +167,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
+        startDate: ad.startDate ?? campaign?.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
       })
     );
   }
