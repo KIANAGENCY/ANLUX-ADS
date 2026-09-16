@@ -40,6 +40,8 @@ export interface PerformanceDecision {
   /** True only when Meta returned the objective-specific primary result action. */
   currentResultsAvailable?: boolean;
   previousResultsAvailable?: boolean;
+  /** Fecha de inicio informada por Meta, para proteger la fase de aprendizaje. */
+  startDate?: string | null;
   generatedAt: string;
 }
 
@@ -87,3 +89,4 @@ export interface DecisionEntityInput {
   /** Account comparison value, present only when it comes from real account data. */
   accountAverageCpc?: number | null;
 }
+
