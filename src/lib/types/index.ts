@@ -107,6 +107,10 @@ export interface DailyMetrics {
   reach: number;
   clicks: number;
   results: number;
+  /** Ingresos atribuidos por Meta; null cuando el proveedor no los informa. */
+  revenue: number | null;
+  /** ROAS de compra informado por Meta; null cuando el proveedor no lo informa. */
+  roas: number | null;
 }
 
 export interface PerformanceMetrics {
@@ -120,6 +124,8 @@ export interface PerformanceMetrics {
   ctr: number;
   cpc: number;
   costPerResult: number;
+  revenue: number | null;
+  roas: number | null;
 }
 
 export type MetricKey = keyof PerformanceMetrics;
@@ -179,3 +185,4 @@ export interface DateRange {
   from: string;
   to: string;
 }
+
