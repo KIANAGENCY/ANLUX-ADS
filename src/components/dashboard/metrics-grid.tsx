@@ -1,6 +1,6 @@
 "use client";
 
-import { DollarSign, Eye, MonitorPlay, Gauge, MousePointerClick, Percent, Coins, Target, Repeat, Users, TrendingUp } from "lucide-react";
+import { DollarSign, Eye, MonitorPlay, Gauge, MousePointerClick, Percent, Coins, Target, Repeat, Users } from "lucide-react";
 import { useAccountMetrics } from "@/hooks/use-account-metrics";
 import { useFilters } from "@/components/providers/filters-provider";
 import { MetricCard } from "./metric-card";
@@ -15,8 +15,6 @@ const METRIC_ORDER: { key: MetricKey; icon: typeof DollarSign }[] = [
   { key: "spend", icon: DollarSign },
   { key: "results", icon: Target },
   { key: "costPerResult", icon: Gauge },
-  { key: "revenue", icon: DollarSign },
-  { key: "roas", icon: TrendingUp },
   { key: "ctr", icon: Percent },
   { key: "cpc", icon: Coins },
   { key: "clicks", icon: MousePointerClick },
@@ -33,7 +31,7 @@ export function MetricsGrid() {
   if (loading || !comparison) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-        {Array.from({ length: 12 }).map((_, i) => (
+        {Array.from({ length: 10 }).map((_, i) => (
           <CardSkeleton key={i} />
         ))}
       </div>
