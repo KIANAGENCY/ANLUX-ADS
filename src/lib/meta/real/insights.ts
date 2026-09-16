@@ -3,7 +3,7 @@ import type { CampaignObjective, DailyMetrics, EntityType } from "@/lib/types";
 import { metaGraphGet } from "./graph-client";
 import { getPrimaryResult, parseActionsArray, toNumber, type ActionBreakdownItem } from "./actions";
 
-const BASE_INSIGHTS_FIELDS = "spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,cost_per_action_type";
+const BASE_INSIGHTS_FIELDS = "spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,cost_per_action_type,action_values,purchase_roas";
 
 interface RawActionItem {
   action_type: string;
@@ -26,6 +26,8 @@ export interface RawInsightsRow {
   ctr?: string;
   actions?: RawActionItem[];
   cost_per_action_type?: RawActionItem[];
+  action_values?: RawActionItem[];
+  purchase_roas?: RawActionItem[];
 }
 
 interface InsightsResponse {
@@ -116,6 +118,22 @@ export function hasPrimaryResult(row: RawInsightsRow, objective: CampaignObjecti
   return getPrimaryResult(parseActionsArray(row.actions), objective) !== null;
 }
 
+const PURCHASE_ACTION_TYPES = new Set(["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"]);
+
+function optionalPurchaseValue(items: RawActionItem[] | undefined): number | null {
+  const purchase = items?.find((item) => PURCHASE_ACTION_TYPES.has(item.action_type));
+  if (!purchase) return null;
+  const value = Number(purchase.value);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function extractRevenueAndRoas(row: RawInsightsRow): Pick<DailyMetrics, "revenue" | "roas"> {
+  return {
+    revenue: optionalPurchaseValue(row.action_values),
+    roas: optionalPurchaseValue(row.purchase_roas),
+  };
+}
+
 /** Convierte una fila de insights de entidad a métricas normalizadas. */
 export function mapInsightsRowToDailyMetrics(
   row: RawInsightsRow,
@@ -136,6 +154,7 @@ export function mapInsightsRowToDailyMetrics(
     reach: toNumber(row.reach),
     clicks: toNumber(row.clicks),
     results,
+    ...extractRevenueAndRoas(row),
   };
 }
 
@@ -148,3 +167,4 @@ export function extractActionsFromRow(row: RawInsightsRow): {
     costPerActionType: parseActionsArray(row.cost_per_action_type),
   };
 }
+
