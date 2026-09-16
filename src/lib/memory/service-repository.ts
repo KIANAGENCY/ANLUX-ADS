@@ -55,7 +55,7 @@ export async function loadServiceBusinessGoals(accountId: string): Promise<{ goa
   }, status: auth.status };
 }
 
-export async function persistServiceIntelligenceMemory(decisionResult: DecisionEngineResult, suite: IntelligenceSuiteResult, goals: BusinessGoals): Promise<MemoryStatus> {
+export async function persistServiceIntelligenceMemory(decisionResult: DecisionEngineResult, suite: IntelligenceSuiteResult, _goals: BusinessGoals): Promise<MemoryStatus> {
   const auth = clientStatus();
   if (!auth.client) return auth.status;
   const totals = campaignTotals(decisionResult.decisions);
