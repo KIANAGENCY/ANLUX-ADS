@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateRealDecisions } from "@/lib/decisions/real-engine";
+import { loadBusinessGoals } from "@/lib/memory/repository";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { parseAccountRangeParams } from "@/lib/meta/real/request-params";
 
@@ -14,9 +15,16 @@ export async function GET(req: NextRequest) {
   const { accountId, from, to } = parsed.params;
 
   try {
-    const result = await generateRealDecisions(accountId, { from, to });
+    let targetCostPerResult: number | null = null;
+    try {
+      targetCostPerResult = (await loadBusinessGoals(accountId)).goals?.targetCostPerResult ?? null;
+    } catch (error) {
+      console.error("No se pudieron cargar las metas confirmadas; se conservará el análisis sin objetivo.", error);
+    }
+    const result = await generateRealDecisions(accountId, { from, to }, { targetCostPerResult });
     return NextResponse.json(result);
   } catch (err) {
     return metaErrorResponse(err);
   }
 }
+
