@@ -15,6 +15,7 @@ import type { ResultAvailabilityByEntity } from "@/lib/ai/types";
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
+import { loadBusinessGoals } from "@/lib/memory/repository";
 
 const ANALYSIS_MODES = ["general", "performance"] as const;
 const MAX_REQUEST_CHARS = 16_384;
@@ -160,6 +161,18 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
   }
 
+  const campaignTotals = Object.values(campaignMetrics).reduce(
+    (totals, metrics) => ({ spend: totals.spend + metrics.spend, clicks: totals.clicks + metrics.clicks }),
+    { spend: 0, clicks: 0 }
+  );
+  const accountAverageCpc = campaignTotals.clicks > 0 ? campaignTotals.spend / campaignTotals.clicks : null;
+  let targetCostPerResult: number | null = null;
+  try {
+    targetCostPerResult = (await loadBusinessGoals(accountId)).goals?.targetCostPerResult ?? null;
+  } catch (error) {
+    console.error("No se pudieron cargar las metas confirmadas para la narración de IA.", error);
+  }
+
   if (currentMetrics.spend === 0 && currentMetrics.impressions === 0) {
     return {
       client,
@@ -254,6 +267,9 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         previous: previousCampaignMetrics[campaign.id],
         currentResultsAvailable: campaignResultAvailability[campaign.id],
         previousResultsAvailable: previousCampaignResultAvailability[campaign.id],
+        startDate: campaign.startDate ?? null,
+        targetCostPerResult,
+        accountAverageCpc,
       })
     );
   }
@@ -273,6 +289,9 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         previous: previousAdSetMetrics[adSet.id] ?? aggregateMetrics([]),
         currentResultsAvailable: adSetResultAvailability[adSet.id],
         previousResultsAvailable: previousAdSetResultAvailability[adSet.id],
+        startDate: adSet.startDate ?? campaigns.find((campaign) => campaign.id === adSet.campaignId)?.startDate ?? null,
+        targetCostPerResult,
+        accountAverageCpc,
       })
     );
   }
@@ -292,6 +311,9 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         previous: previousAdMetrics[ad.id] ?? aggregateMetrics([]),
         currentResultsAvailable: adResultAvailability[ad.id],
         previousResultsAvailable: previousAdResultAvailability[ad.id],
+        startDate: campaigns.find((campaign) => campaign.id === ad.campaignId)?.startDate ?? null,
+        targetCostPerResult,
+        accountAverageCpc,
       })
     );
   }
@@ -420,3 +442,4 @@ export async function POST(req: NextRequest) {
     return aiErrorResponse(err);
   }
 }
+
