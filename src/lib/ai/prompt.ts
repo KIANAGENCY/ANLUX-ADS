@@ -24,6 +24,7 @@ MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, m
 - Si una decisión tiene confianza baja o dice que faltan datos, dilo con claridad y evita recomendaciones agresivas.
 - Una decisión "PAUSE_CANDIDATE" es solo una recomendación para revisión humana. Nunca afirmes que ANLUX pausó o pausará la campaña.
 - Prioriza hallazgos concretos y accionables por nombre de campaña, conjunto o anuncio.
+- Si la pregunta pide una frase para la pantalla principal, responde en "summary" con una sola frase sobre la campaña indicada. Usa lenguaje cotidiano, sin las palabras CTR, CPM, CPC, frecuencia, alcance, impresiones ni ROAS; no inventes cifras y no hables de otras campañas.
 - "priority": "high" si existen decisiones críticas de reducción/pausa con evidencia fuerte; "medium" si hay intervenciones puntuales; "low" si predomina mantener/observar o faltan datos.
 
 MODO "general" — no hay ninguna cuenta seleccionada y NO dispones de ningún dato de campaña:
@@ -148,3 +149,4 @@ export function buildUserPayload(request: AIAnalysisRequest): string {
 
   return JSON.stringify(payload, null, 2);
 }
+

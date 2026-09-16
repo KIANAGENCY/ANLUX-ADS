@@ -50,14 +50,36 @@ const insufficient = evaluateDecision(
 );
 assert.equal(insufficient.action, "INSUFFICIENT_DATA", "ANLUX debe saber cuándo no hay evidencia suficiente");
 
+const learning = evaluateDecision(
+  input({
+    startDate: new Date().toISOString(),
+    current: metrics({ spend: 200, results: 20, clicks: 120, ctr: 3, cpc: 1, costPerResult: 10 }),
+    previous: metrics({ spend: 200, results: 10, clicks: 80, ctr: 2, cpc: 1.5, costPerResult: 20 }),
+  })
+);
+assert.equal(learning.action, "INSUFFICIENT_DATA", "una campaña en sus primeros tres días no recibe recomendaciones fuertes");
+
 const pauseCandidate = evaluateDecision(
   input({
-    current: metrics({ spend: 300, results: 15, clicks: 100, ctr: 1, cpc: 3, costPerResult: 20 }),
+    objective: "MESSAGES",
+    startDate: "2020-01-01T00:00:00.000Z",
+    targetCostPerResult: 20,
+    currentResultsAvailable: true,
+    current: metrics({ spend: 300, results: 0, clicks: 100, ctr: 1, cpc: 3, costPerResult: 0 }),
     previous: metrics({ spend: 300, results: 30, clicks: 150, ctr: 2.5, cpc: 1, costPerResult: 10 }),
   })
 );
-assert.equal(pauseCandidate.confidence, "high");
-assert.equal(pauseCandidate.action, "PAUSE_CANDIDATE", "deterioro fuerte con evidencia alta debe ser candidato a pausa");
+assert.equal(pauseCandidate.action, "PAUSE_CANDIDATE", "solo una campaña de mensajes con los tres candados cumplidos puede ser candidata a pausa");
+
+const pauseLocked = evaluateDecision(
+  input({
+    objective: "MESSAGES",
+    startDate: "2020-01-01T00:00:00.000Z",
+    currentResultsAvailable: true,
+    current: metrics({ spend: 300, results: 0, clicks: 100, costPerResult: 0 }),
+  })
+);
+assert.equal(pauseLocked.action, "INSUFFICIENT_DATA", "sin costo típico u objetivo confirmado no se recomienda pausar");
 
 const creative = evaluateDecision(
   input({
@@ -81,7 +103,7 @@ const audience = evaluateDecision(
     previous: metrics({ impressions: 5000, reach: 2500, frequency: 2, ctr: 2, cpc: 1.2 }),
   })
 );
-assert.equal(audience.action, "REVIEW_AUDIENCE", "frecuencia alta + deterioro debe señalar audiencia");
+assert.equal(audience.action, "REFRESH_CREATIVE", "la frecuencia alta activa la protección de fatiga creativa");
 
 const unknown = evaluateDecision(
   input({
@@ -93,4 +115,5 @@ const unknown = evaluateDecision(
 assert.notEqual(unknown.action, "SCALE", "un objetivo UNKNOWN nunca debe generar escalado agresivo");
 assert.notEqual(unknown.action, "PAUSE_CANDIDATE", "un objetivo UNKNOWN nunca debe generar pausa agresiva");
 
-console.log("Decision Engine v1: 6 escenarios correctos.");
+console.log("Decision Engine: guardarraíles de mensajes correctos.");
+

@@ -29,6 +29,18 @@ function hasCurrentActivity(metrics: PerformanceMetrics): boolean {
   return metrics.spend > 0 || metrics.impressions > 0 || metrics.clicks > 0 || metrics.results > 0;
 }
 
+function accountAverageCpc(rows: Map<string, Parameters<typeof mapInsightsRowToDailyMetrics>[0]>): number | null {
+  let spend = 0;
+  let clicks = 0;
+  for (const row of rows.values()) {
+    const rowSpend = Number(row.spend);
+    const rowClicks = Number(row.clicks);
+    if (Number.isFinite(rowSpend) && rowSpend >= 0) spend += rowSpend;
+    if (Number.isFinite(rowClicks) && rowClicks >= 0) clicks += rowClicks;
+  }
+  return clicks > 0 ? spend / clicks : null;
+}
+
 function summarize(decisions: PerformanceDecision[]): DecisionEngineSummary {
   return {
     total: decisions.length,
@@ -70,7 +82,7 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
  * Genera recomendaciones determinísticas usando exclusivamente datos reales de Meta.
  * No existe ninguna llamada de escritura ni al Marketing API ni a un proveedor de IA.
  */
-export async function generateRealDecisions(accountId: string, range: DateRange): Promise<DecisionEngineResult> {
+export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
   const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows] =
@@ -88,6 +100,7 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
     ]);
 
   const currency = accounts.find((account) => account.id === accountId)?.currency ?? null;
+  const currentAccountAverageCpc = accountAverageCpc(currentCampaignRows);
   const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   const decisions: PerformanceDecision[] = [];
 
@@ -111,6 +124,9 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, campaign.objective)),
+        startDate: campaign.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
+        accountAverageCpc: currentAccountAverageCpc,
       })
     );
   }
@@ -137,6 +153,9 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
+        startDate: adSet.startDate ?? campaign?.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
+        accountAverageCpc: currentAccountAverageCpc,
       })
     );
   }
@@ -163,6 +182,9 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
+        startDate: ad.startDate ?? campaign?.startDate ?? null,
+        targetCostPerResult: options?.targetCostPerResult ?? null,
+        accountAverageCpc: currentAccountAverageCpc,
       })
     );
   }
@@ -178,3 +200,4 @@ export async function generateRealDecisions(accountId: string, range: DateRange)
     decisions: sorted,
   };
 }
+

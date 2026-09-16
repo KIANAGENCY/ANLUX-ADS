@@ -3,7 +3,7 @@ import { canAccessAnlux } from "@/lib/supabase/access";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "@/lib/supabase/config";
 
-const PROTECTED_PAGE_PREFIXES = ["/overview","/campaigns","/adsets","/ads","/creatives","/intelligence","/decisions","/ai-analyst","/alerts","/settings"];
+const PROTECTED_PAGE_PREFIXES = ["/today","/overview","/campaigns","/adsets","/ads","/creatives","/intelligence","/decisions","/ai-analyst","/alerts","/settings"];
 const PROTECTED_API_PREFIXES = ["/api/meta", "/api/ai"];
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 function matchesPrefix(pathname:string,prefixes:readonly string[]){return prefixes.some(prefix=>pathname===prefix||pathname.startsWith(`${prefix}/`));}
@@ -20,7 +20,7 @@ export async function proxy(request:NextRequest){
  if(user&&!canAccessAnlux(user)&&protectedPage)return NextResponse.redirect(new URL("/access-required",request.url));
  if(!user&&protectedApi)return apiError("No autorizado. Inicia sesión para acceder a esta API.",401);
  if(!user&&protectedPage)return NextResponse.redirect(new URL("/login",request.url));
- if(user&&pathname==="/login")return NextResponse.redirect(new URL("/overview",request.url));
+ if(user&&pathname==="/login")return NextResponse.redirect(new URL("/today",request.url));
  if(protectedApi)response.headers.set("Cache-Control","private, no-store, max-age=0"); return response;
 }
 export const config={matcher:["/((?!_next/static|_next/image|favicon.ico).*)"]};

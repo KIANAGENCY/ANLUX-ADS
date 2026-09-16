@@ -19,6 +19,7 @@ export function aggregateMetrics(rows: DailyMetrics[]): PerformanceMetrics {
     },
     { spend: 0, impressions: 0, reach: 0, clicks: 0, results: 0 }
   );
+  const revenue = rows.some((row) => row.revenue === null) ? null : rows.reduce((sum, row) => sum + row.revenue!, 0);
 
   return {
     spend: totals.spend,
@@ -31,6 +32,8 @@ export function aggregateMetrics(rows: DailyMetrics[]): PerformanceMetrics {
     ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0,
     cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
     costPerResult: totals.results > 0 ? totals.spend / totals.results : 0,
+    revenue,
+    roas: revenue !== null && totals.spend > 0 ? revenue / totals.spend : null,
   };
 }
 
@@ -45,9 +48,12 @@ const METRIC_KEYS: MetricKey[] = [
   "ctr",
   "cpc",
   "costPerResult",
+  "revenue",
+  "roas",
 ];
 
-function percentChange(current: number, previous: number): number | null {
+function percentChange(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null) return null;
   if (previous === 0) {
     return current === 0 ? 0 : null;
   }
@@ -81,6 +87,8 @@ export const METRIC_DIRECTION: Record<MetricKey, "up-is-good" | "down-is-good" |
   ctr: "up-is-good",
   cpc: "down-is-good",
   costPerResult: "down-is-good",
+  revenue: "up-is-good",
+  roas: "up-is-good",
 };
 
 export function isChangePositive(metric: MetricKey, changePercent: number | null): boolean | null {
@@ -102,4 +110,7 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
   ctr: "CTR",
   cpc: "CPC",
   costPerResult: "Costo por resultado",
+  revenue: "Ingresos",
+  roas: "ROAS",
 };
+

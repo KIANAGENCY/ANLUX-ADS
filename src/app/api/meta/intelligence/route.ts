@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateRealDecisions } from "@/lib/decisions/real-engine";
 import { buildIntelligenceSuite } from "@/lib/intelligence/engine";
 import type { BusinessGoals } from "@/lib/intelligence/types";
-import { persistIntelligenceMemory, type MemoryStatus } from "@/lib/memory/repository";
+import { loadBusinessGoals, persistIntelligenceMemory, type MemoryStatus } from "@/lib/memory/repository";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { parseAccountRangeParams } from "@/lib/meta/real/request-params";
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const { accountId, from, to } = parsed.params;
   const risk = req.nextUrl.searchParams.get("risk");
-  const goals: BusinessGoals = {
+  const requestGoals: BusinessGoals = {
     targetCostPerResult: numberOrNull(req.nextUrl.searchParams.get("targetCpr")),
     minimumRoas: numberOrNull(req.nextUrl.searchParams.get("minRoas")),
     monthlyBudget: numberOrNull(req.nextUrl.searchParams.get("monthlyBudget")),
@@ -27,13 +27,25 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const decisionResult = await generateRealDecisions(accountId, { from, to });
+    let savedGoals: BusinessGoals | null = null;
+    try {
+      savedGoals = (await loadBusinessGoals(accountId)).goals;
+    } catch (error) {
+      console.error("No se pudieron cargar las metas confirmadas; se conservará el análisis sin ellas.", error);
+    }
+    const goals: BusinessGoals = {
+      ...savedGoals,
+      ...requestGoals,
+      targetCostPerResult: requestGoals.targetCostPerResult ?? savedGoals?.targetCostPerResult ?? null,
+    };
+    const decisionResult = await generateRealDecisions(accountId, { from, to }, { targetCostPerResult: goals.targetCostPerResult });
     const suite = buildIntelligenceSuite(decisionResult.decisions, goals);
 
     let memory: MemoryStatus;
     try {
       memory = await persistIntelligenceMemory(decisionResult, suite, goals);
     } catch (error) {
+      console.error("No se pudo persistir la memoria histórica de ANLUX.", error);
       memory = {
         state: "unavailable",
         enabled: true,
@@ -46,3 +58,4 @@ export async function GET(req: NextRequest) {
     return metaErrorResponse(error);
   }
 }
+

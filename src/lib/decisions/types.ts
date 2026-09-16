@@ -40,6 +40,8 @@ export interface PerformanceDecision {
   /** True only when Meta returned the objective-specific primary result action. */
   currentResultsAvailable?: boolean;
   previousResultsAvailable?: boolean;
+  /** Fecha de inicio informada por Meta, para proteger la fase de aprendizaje. */
+  startDate?: string | null;
   generatedAt: string;
 }
 
@@ -75,10 +77,16 @@ export interface DecisionEntityInput {
   objective: CampaignObjective;
   current: PerformanceMetrics;
   previous: PerformanceMetrics;
-  /**
-   * `false` means the numeric `results` field is only a structural placeholder;
-   * it must never be interpreted as a confirmed zero-result outcome.
-   */
+  /** False means results is structural only and must never be read as a zero. */
   currentResultsAvailable?: boolean;
   previousResultsAvailable?: boolean;
+  /** Start date supplied by Meta for the parent campaign or the entity itself. */
+  startDate?: string | null;
+  /** A human-confirmed target; never an unconfirmed automatic proposal. */
+  targetCostPerResult?: number | null;
+  /** Typical confirmed account cost when historical memory is available. */
+  typicalCostPerResult?: number | null;
+  /** Account comparison value, present only when it comes from real account data. */
+  accountAverageCpc?: number | null;
 }
+

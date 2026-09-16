@@ -6,6 +6,7 @@ import {
   fetchAccountDailyInsights,
   fetchAggregatedInsightsByEntity,
   fetchCampaignDailyInsights,
+  extractRevenueAndRoas,
 } from "./insights";
 import { getPrimaryResult, parseActionsArray, toNumber } from "./actions";
 import { aggregateMetrics } from "@/lib/utils/metrics";
@@ -41,6 +42,7 @@ export async function fetchAccountDailyMetrics(
       reach: toNumber(row.reach),
       clicks: toNumber(row.clicks),
       results: resultsByDate.get(date) ?? 0,
+      ...extractRevenueAndRoas(row),
     };
   });
 }
@@ -75,6 +77,7 @@ export async function fetchAccountRangeMetrics(
         reach: toNumber(accountRow.reach),
         clicks: toNumber(accountRow.clicks),
         results,
+        ...extractRevenueAndRoas(accountRow),
       },
     ]);
   }
@@ -103,6 +106,7 @@ export async function fetchAccountRangeMetrics(
         reach: 0,
         clicks: toNumber(row.clicks),
         results: getPrimaryResult(actions, objective) ?? 0,
+        ...extractRevenueAndRoas(row),
       });
     }
     return aggregateMetrics(fallbackRows);
@@ -110,3 +114,4 @@ export async function fetchAccountRangeMetrics(
 
   return aggregateMetrics([]);
 }
+
