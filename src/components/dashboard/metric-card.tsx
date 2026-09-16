@@ -6,9 +6,11 @@ import { formatCurrency, formatDecimal, formatNumber, formatPercent, formatSigne
 import { isChangePositive, METRIC_LABELS } from "@/lib/utils/metrics";
 import { cn } from "@/lib/utils/cn";
 
-function formatMetric(metric: MetricKey, value: number, currency: string | null): string {
+function formatMetric(metric: MetricKey, value: number | null, currency: string | null): string {
+  if (value === null) return "—";
   switch (metric) {
     case "spend":
+    case "revenue":
     case "cpm":
     case "cpc":
     case "costPerResult":
@@ -22,6 +24,8 @@ function formatMetric(metric: MetricKey, value: number, currency: string | null)
       return formatDecimal(value);
     case "ctr":
       return formatPercent(value);
+    case "roas":
+      return `${formatDecimal(value)}x`;
   }
 }
 
@@ -36,6 +40,8 @@ const METRIC_TOOLTIPS: Record<MetricKey, string> = {
   ctr: "Porcentaje de impresiones que resultaron en un clic.",
   cpc: "Costo promedio por clic.",
   costPerResult: "Inversión promedio necesaria para conseguir un resultado.",
+  revenue: "Ingresos atribuidos a compras por Meta.",
+  roas: "Retorno atribuido a compras por cada unidad invertida.",
 };
 
 export function MetricCard({
@@ -46,17 +52,20 @@ export function MetricCard({
   icon: Icon,
 }: {
   metric: MetricKey;
-  value: number;
+  value: number | null;
   changePercent: number | null;
   currency: string | null;
   icon?: LucideIcon;
 }) {
   const positive = isChangePositive(metric, changePercent);
+  const tooltip = value === null && (metric === "revenue" || metric === "roas")
+    ? "Meta no reporta ingresos para este tipo de campaña."
+    : METRIC_TOOLTIPS[metric];
 
   return (
     <Card className="p-4 transition-colors hover:border-white/12">
       <div className="flex items-center justify-between gap-2">
-        <Tooltip content={METRIC_TOOLTIPS[metric]}>
+        <Tooltip content={tooltip}>
           <span className="cursor-default border-b border-dotted border-white/15 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground-2 uppercase">
             {METRIC_LABELS[metric]}
           </span>
@@ -97,3 +106,4 @@ export function MetricCard({
     </Card>
   );
 }
+
