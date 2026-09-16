@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CircleAlert, CircleCheck, CircleHelp, CircleStop, ChevronRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -25,6 +25,31 @@ export default function TodayPage() {
   const campaigns = result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [];
   const [quality, setQuality] = useState<Record<string, string>>({});
   const [savingCampaign, setSavingCampaign] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<{ targetCostPerResult: number } | null>(null);
+  const [confirmingTarget, setConfirmingTarget] = useState(false);
+
+  useEffect(() => {
+    if (!result?.accountId) return;
+    void fetch(`/api/meta/memory/target-proposal?accountId=${encodeURIComponent(result.accountId)}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => setProposal(payload?.proposal ?? null))
+      .catch(() => setProposal(null));
+  }, [result?.accountId]);
+
+  async function confirmTarget() {
+    if (!result || !proposal) return;
+    setConfirmingTarget(true);
+    try {
+      const response = await fetch("/api/meta/memory/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: result.accountId, goals: { targetCostPerResult: proposal.targetCostPerResult } }),
+      });
+      if (response.ok) setProposal(null);
+    } finally {
+      setConfirmingTarget(false);
+    }
+  }
 
   async function saveQuality(campaignId: string) {
     const value = Number(quality[campaignId]);
@@ -51,6 +76,15 @@ export default function TodayPage() {
       </header>
 
       {error && <ErrorBanner message={error} />}
+
+      {proposal && (
+        <section className="rounded-2xl border border-accent/30 bg-accent/10 p-4">
+          <p className="text-sm font-semibold text-foreground">Para esta cuenta, un costo por conversación aceptable parece ser {proposal.targetCostPerResult.toFixed(2)}. ¿Lo confirmas?</p>
+          <button type="button" onClick={() => void confirmTarget()} disabled={confirmingTarget} className="mt-3 min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">
+            {confirmingTarget ? "Guardando…" : "Confirmar objetivo"}
+          </button>
+        </section>
+      )}
 
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-44 w-full rounded-2xl" />)}</div>
