@@ -50,6 +50,15 @@ const insufficient = evaluateDecision(
 );
 assert.equal(insufficient.action, "INSUFFICIENT_DATA", "ANLUX debe saber cuándo no hay evidencia suficiente");
 
+const learning = evaluateDecision(
+  input({
+    startDate: new Date().toISOString(),
+    current: metrics({ spend: 200, results: 20, clicks: 120, ctr: 3, cpc: 1, costPerResult: 10 }),
+    previous: metrics({ spend: 200, results: 10, clicks: 80, ctr: 2, cpc: 1.5, costPerResult: 20 }),
+  })
+);
+assert.equal(learning.action, "INSUFFICIENT_DATA", "una campaña en sus primeros tres días no recibe recomendaciones fuertes");
+
 const pauseCandidate = evaluateDecision(
   input({
     objective: "MESSAGES",
@@ -107,3 +116,4 @@ assert.notEqual(unknown.action, "SCALE", "un objetivo UNKNOWN nunca debe generar
 assert.notEqual(unknown.action, "PAUSE_CANDIDATE", "un objetivo UNKNOWN nunca debe generar pausa agresiva");
 
 console.log("Decision Engine: guardarraíles de mensajes correctos.");
+
