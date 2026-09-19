@@ -150,6 +150,13 @@ function translateGeminiError(err: unknown): AIAnalystError {
       console.error("[ai] GEMINI_API_KEY inválida o rechazada por Google.");
       return new AIAnalystError("auth", "No se pudo autenticar con el servicio de IA. Contacta al administrador.");
     }
+    if (err.status === 500 || err.status === 502 || err.status === 503 || err.status === 504) {
+      console.warn("[ai] Gemini temporalmente no disponible:", err.status);
+      return new AIAnalystError(
+        "connection",
+        "El servicio de IA está temporalmente saturado. Intenta de nuevo."
+      );
+    }
     console.error("[ai] error de Gemini:", err.status, err.message);
     return new AIAnalystError("unknown", "El servicio de IA devolvió un error inesperado. Intenta de nuevo.");
   }
