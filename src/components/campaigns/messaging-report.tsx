@@ -39,8 +39,8 @@ export function CampaignMessagingReport({ campaigns, loading }: { campaigns: Cam
 
   return <Card className="overflow-hidden">
     <div className="space-y-2 p-5">
-      <h2 className="text-base font-semibold">Conversaciones por campaña</h2>
-      <p className="text-sm text-muted-foreground">Conversaciones iniciadas atribuidas por Meta del {dateRange.from} al {dateRange.to}. El origen indica dónde apareció el anuncio; el destino, dónde comenzó la conversación.</p>
+      <h2 className="text-base font-semibold">Conversaciones iniciadas por campaña</h2>
+      <p className="text-sm text-muted-foreground">Conversaciones iniciadas atribuidas por Meta del {dateRange.from} al {dateRange.to}. El origen indica dónde apareció el anuncio; el destino, dónde comenzó la conversación. Este informe no incluye el contenido de los mensajes.</p>
       <p className="text-xs text-muted-foreground">Esta cifra cuenta conversaciones, no cada mensaje dentro del chat ni clics en el botón. «No disponible» significa que Meta no devolvió la métrica; no equivale a cero.</p>
       {data.warnings.map(w => <p key={w} role="status" className="text-sm text-amber-400">{w}</p>)}
     </div>

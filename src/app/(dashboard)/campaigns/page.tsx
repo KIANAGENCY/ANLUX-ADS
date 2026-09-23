@@ -28,7 +28,7 @@ export default function CampaignsPage() {
     <div className="space-y-4">
       <div className="flex gap-2" role="group" aria-label="Vista de campañas">
         <button type="button" aria-pressed={view === "performance"} onClick={() => setView("performance")} className={`rounded-lg border px-4 py-2 text-sm ${view === "performance" ? "border-accent text-accent-light" : "border-border-subtle text-muted-foreground"}`}>Rendimiento</button>
-        <button type="button" aria-pressed={view === "messaging"} onClick={() => setView("messaging")} className={`rounded-lg border px-4 py-2 text-sm ${view === "messaging" ? "border-accent text-accent-light" : "border-border-subtle text-muted-foreground"}`}>Conversaciones</button>
+        <button type="button" aria-pressed={view === "messaging"} onClick={() => setView("messaging")} className={`rounded-lg border px-4 py-2 text-sm ${view === "messaging" ? "border-accent text-accent-light" : "border-border-subtle text-muted-foreground"}`}>Conversaciones iniciadas</button>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">

@@ -3,7 +3,8 @@ import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
-import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAccountAggregatedInsight, fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { accountObservationMetrics } from "./account-metrics";
 import type { CampaignObjective, DateRange, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
@@ -85,7 +86,7 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
 export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
-  const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows] =
+  const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow] =
     await Promise.all([
       fetchAdAccounts(),
       fetchRealCampaigns(accountId),
@@ -97,9 +98,12 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
       fetchAggregatedInsightsByEntity(accountId, "adset", previous.from, previous.to),
       fetchAggregatedInsightsByEntity(accountId, "ad", range.from, range.to),
       fetchAggregatedInsightsByEntity(accountId, "ad", previous.from, previous.to),
+      fetchAccountAggregatedInsight(accountId, range.from, range.to),
     ]);
 
   const currency = accounts.find((account) => account.id === accountId)?.currency ?? null;
+  const objectives = new Map(campaigns.map((campaign) => [campaign.id, campaign.objective]));
+  const accountMetrics = accountObservationMetrics(accountRow, currentCampaignRows, objectives);
   const currentAccountAverageCpc = accountAverageCpc(currentCampaignRows);
   const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   const decisions: PerformanceDecision[] = [];
@@ -198,6 +202,6 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
     generatedAt: new Date().toISOString(),
     summary: summarize(sorted),
     decisions: sorted,
+    accountMetrics,
   };
 }
-

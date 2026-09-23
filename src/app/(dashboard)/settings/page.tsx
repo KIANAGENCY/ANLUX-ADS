@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { isMetaApiConfigured } from "@/lib/meta/config";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isMemoryEnabled } from "@/lib/memory/config";
 import { isActiveProviderConfigured, resolveAIProvider } from "@/lib/ai/config";
 import { MetaHealth } from "@/components/settings/meta-health";
 
@@ -28,9 +29,15 @@ const INTEGRATIONS = [
   },
   {
     name: "Supabase Auth",
-    description: "Autenticación real de acceso al panel. La persistencia histórica todavía no está habilitada.",
+    description: "Autenticación real de acceso al panel.",
     envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
     configured: isSupabaseConfigured(),
+  },
+  {
+    name: "Memoria histórica",
+    description: "Guarda observaciones, decisiones y metas en Supabase cuando está habilitada. Su disponibilidad se indica en el análisis.",
+    envVars: ["ANLUX_MEMORY_ENABLED"],
+    configured: isSupabaseConfigured() && isMemoryEnabled(),
   },
   {
     name: AI_PROVIDER_INFO.label,

@@ -25,11 +25,11 @@ function parseGoals(value: unknown): BusinessGoals | null {
   ) return null;
 
   return {
-    targetCostPerResult: (goals.targetCostPerResult as number | null | undefined) ?? null,
-    minimumRoas: (goals.minimumRoas as number | null | undefined) ?? null,
-    monthlyBudget: (goals.monthlyBudget as number | null | undefined) ?? null,
-    grossMarginPercent: (goals.grossMarginPercent as number | null | undefined) ?? null,
-    riskTolerance: (goals.riskTolerance as BusinessGoals["riskTolerance"]) ?? "balanced",
+    targetCostPerResult: goals.targetCostPerResult as number | null | undefined,
+    minimumRoas: goals.minimumRoas as number | null | undefined,
+    monthlyBudget: goals.monthlyBudget as number | null | undefined,
+    grossMarginPercent: goals.grossMarginPercent as number | null | undefined,
+    riskTolerance: goals.riskTolerance as BusinessGoals["riskTolerance"],
   };
 }
 
@@ -70,9 +70,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const status = await saveBusinessGoals(accountId, goals);
+    const { goals: saved } = await loadBusinessGoals(accountId);
+    const merged = {
+      targetCostPerResult: goals.targetCostPerResult === undefined ? saved?.targetCostPerResult ?? null : goals.targetCostPerResult,
+      minimumRoas: goals.minimumRoas === undefined ? saved?.minimumRoas ?? null : goals.minimumRoas,
+      monthlyBudget: goals.monthlyBudget === undefined ? saved?.monthlyBudget ?? null : goals.monthlyBudget,
+      grossMarginPercent: goals.grossMarginPercent === undefined ? saved?.grossMarginPercent ?? null : goals.grossMarginPercent,
+      riskTolerance: goals.riskTolerance ?? saved?.riskTolerance ?? "balanced",
+    };
+    const status = await saveBusinessGoals(accountId, merged);
     if (status.state !== "ready") return NextResponse.json({ status }, { status: 409 });
-    return NextResponse.json({ goals, status });
+    return NextResponse.json({ goals: merged, status });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudieron guardar las metas.";
     return NextResponse.json({ error: message }, { status: 503 });

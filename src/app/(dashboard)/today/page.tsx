@@ -21,8 +21,6 @@ const PRESENTATION: Record<DecisionAction, { label: string; className: string; I
   INSUFFICIENT_DATA: { label: "AÚN NO SÉ", className: "border-slate-500/30 bg-slate-500/10 text-slate-200", Icon: CircleHelp },
 };
 
-const HOME_FORBIDDEN_TERMS = /\b(CTR|CPM|CPC|frecuencia|alcance|impresiones|ROAS)\b/i;
-
 function fallbackNarrative(decision: PerformanceDecision): string {
   if (decision.action === "PAUSE_CANDIDATE") return "Meta confirmó que aún no hay conversaciones y ya se cumplieron los candados de seguridad. Revisa esta campaña antes de seguir invirtiendo.";
   if (decision.action === "INSUFFICIENT_DATA") return "Aún no hay información suficiente para recomendar un cambio fuerte de forma responsable.";
@@ -33,7 +31,7 @@ function fallbackNarrative(decision: PerformanceDecision): string {
 export default function TodayPage() {
   const { loading, result, error } = useIntelligence();
   const { clientId, dateRange } = useFilters();
-  const { from, to } = dateRange;
+  const { to } = dateRange;
   const campaigns = useMemo(
     () => result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [],
     [result]
@@ -42,7 +40,6 @@ export default function TodayPage() {
   const [savingCampaign, setSavingCampaign] = useState<string | null>(null);
   const [proposal, setProposal] = useState<{ targetCostPerResult: number } | null>(null);
   const [confirmingTarget, setConfirmingTarget] = useState(false);
-  const [narratives, setNarratives] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!clientId) return;
@@ -51,35 +48,6 @@ export default function TodayPage() {
       .then((payload) => setProposal(payload?.proposal ?? null))
       .catch(() => setProposal(null));
   }, [clientId]);
-
-  useEffect(() => {
-    if (!result || campaigns.length === 0) {
-      return;
-    }
-    let cancelled = false;
-    void Promise.all(campaigns.map(async (decision) => {
-      try {
-        const response = await fetch("/api/ai/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "performance",
-            clientId,
-            dateRange: { from, to },
-            question: `Escribe una frase para la pantalla principal, solamente sobre la campaña \"${decision.entityName}\". Explica qué hacer hoy sin jerga ni siglas.`,
-          }),
-        });
-        const payload = await response.json();
-        const summary = response.ok && typeof payload.summary === "string" ? payload.summary.trim() : "";
-        return [decision.id, summary && !HOME_FORBIDDEN_TERMS.test(summary) ? summary : fallbackNarrative(decision)] as const;
-      } catch {
-        return [decision.id, fallbackNarrative(decision)] as const;
-      }
-    })).then((entries) => {
-      if (!cancelled) setNarratives(Object.fromEntries(entries));
-    });
-    return () => { cancelled = true; };
-  }, [result, campaigns, clientId, from, to]);
 
   async function confirmTarget() {
     if (!result || !proposal) return;
@@ -148,7 +116,7 @@ export default function TodayPage() {
                     <Icon className="size-3.5" aria-hidden />{state.label}
                   </span>
                 </div>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">{narratives[decision.id] ?? fallbackNarrative(decision)}</p>
+                <p className="mt-4 text-sm leading-6 text-muted-foreground">{fallbackNarrative(decision)}</p>
                 {decision.currentResultsAvailable === true && (
                   <form
                     className="mt-4 rounded-xl border border-border-subtle bg-surface-2/50 p-3"
@@ -186,4 +154,3 @@ export default function TodayPage() {
     </main>
   );
 }
-

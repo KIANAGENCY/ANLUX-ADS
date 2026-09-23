@@ -17,6 +17,10 @@ export function ClientSwitcher() {
   const label = current?.name ?? (realAccountsLoading ? "Cargando cuentas…" : "Sin cuentas de Meta");
   const subtitle = current?.id ?? (realAccountsLoading ? "" : "Revisa la conexión con Meta");
 
+  if (!realAccountsLoading && realAccounts.length === 1) {
+    return <span className="rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm font-medium text-foreground">{label}</span>;
+  }
+
   return (
     <Dropdown
       trigger={

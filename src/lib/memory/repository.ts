@@ -1,5 +1,5 @@
 import "server-only";
-import type { DecisionEngineResult, PerformanceDecision } from "@/lib/decisions/types";
+import type { DecisionEngineResult } from "@/lib/decisions/types";
 import type { BusinessGoals, IntelligenceSuiteResult } from "@/lib/intelligence/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isMemoryEnabled } from "./config";
@@ -74,22 +74,6 @@ async function ensureAccount(client: AuthorizedClient, accountId: string, curren
   if (error) throw error;
 }
 
-function campaignTotals(decisions: PerformanceDecision[]) {
-  return decisions
-    .filter((decision) => decision.entityType === "campaign")
-    .reduce(
-      (acc, decision) => {
-        acc.spend += decision.currentMetrics.spend;
-        acc.impressions += decision.currentMetrics.impressions;
-        acc.reach += decision.currentMetrics.reach;
-        acc.clicks += decision.currentMetrics.clicks;
-        acc.results += decision.currentMetrics.results;
-        return acc;
-      },
-      { spend: 0, impressions: 0, reach: 0, clicks: 0, results: 0 }
-    );
-}
-
 export async function saveBusinessGoals(accountId: string, goals: BusinessGoals): Promise<MemoryStatus> {
   const auth = await getAuthorizedClient();
   if (!auth.client) return auth.status;
@@ -114,22 +98,15 @@ export async function saveBusinessGoals(accountId: string, goals: BusinessGoals)
 export async function persistIntelligenceMemory(
   decisionResult: DecisionEngineResult,
   suite: IntelligenceSuiteResult,
-  goals: BusinessGoals
+  _goals: BusinessGoals
 ): Promise<MemoryStatus> {
   const auth = await getAuthorizedClient();
   if (!auth.client) return auth.status;
 
   const accountId = decisionResult.accountId;
-  const totals = campaignTotals(decisionResult.decisions);
+  const totals = decisionResult.accountMetrics;
+  if (!totals) throw new Error("No hay métricas agregadas verificadas de la cuenta; se omitió el snapshot histórico.");
   await ensureAccount(auth.client, accountId, decisionResult.currency);
-
-  const hasGoalValue =
-    goals.targetCostPerResult != null ||
-    goals.minimumRoas != null ||
-    goals.monthlyBudget != null ||
-    goals.grossMarginPercent != null ||
-    goals.riskTolerance != null;
-  if (hasGoalValue) await saveBusinessGoals(accountId, goals);
 
   const { error: observationError } = await auth.client.from("account_period_observations").upsert(
     {

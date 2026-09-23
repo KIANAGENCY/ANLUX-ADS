@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -32,6 +34,8 @@ jobs:
         run: node scripts/test-intelligence-engine.mjs
       - name: Memory safety tests
         run: node scripts/test-memory-safety.mjs
+      - name: Account snapshot regression
+        run: node scripts/test-audit-regressions.mjs
       - name: Messaging attribution tests
         run: node scripts/test-messaging.mjs
       - name: Meta data quality tests

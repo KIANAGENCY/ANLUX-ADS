@@ -34,9 +34,11 @@ export async function GET(req: NextRequest) {
       console.error("No se pudieron cargar las metas confirmadas; se conservará el análisis sin ellas.", error);
     }
     const goals: BusinessGoals = {
-      ...savedGoals,
-      ...requestGoals,
       targetCostPerResult: requestGoals.targetCostPerResult ?? savedGoals?.targetCostPerResult ?? null,
+      minimumRoas: requestGoals.minimumRoas ?? savedGoals?.minimumRoas ?? null,
+      monthlyBudget: requestGoals.monthlyBudget ?? savedGoals?.monthlyBudget ?? null,
+      grossMarginPercent: requestGoals.grossMarginPercent ?? savedGoals?.grossMarginPercent ?? null,
+      riskTolerance: req.nextUrl.searchParams.has("risk") ? requestGoals.riskTolerance : savedGoals?.riskTolerance ?? "balanced",
     };
     const decisionResult = await generateRealDecisions(accountId, { from, to }, { targetCostPerResult: goals.targetCostPerResult });
     const suite = buildIntelligenceSuite(decisionResult.decisions, goals);
@@ -58,4 +60,3 @@ export async function GET(req: NextRequest) {
     return metaErrorResponse(error);
   }
 }
-

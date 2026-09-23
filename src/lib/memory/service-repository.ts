@@ -1,5 +1,5 @@
 import "server-only";
-import type { DecisionEngineResult, PerformanceDecision } from "@/lib/decisions/types";
+import type { DecisionEngineResult } from "@/lib/decisions/types";
 import type { BusinessGoals, IntelligenceSuiteResult } from "@/lib/intelligence/types";
 import { isMemoryEnabled } from "./config";
 import type { MemoryStatus } from "./repository";
@@ -7,19 +7,6 @@ import { getSupabaseServiceClient } from "@/lib/supabase/service";
 
 function unavailable(message: string): MemoryStatus {
   return { state: "unavailable", enabled: true, message };
-}
-
-function campaignTotals(decisions: PerformanceDecision[]) {
-  return decisions.filter((decision) => decision.entityType === "campaign").reduce(
-    (acc, decision) => ({
-      spend: acc.spend + decision.currentMetrics.spend,
-      impressions: acc.impressions + decision.currentMetrics.impressions,
-      reach: acc.reach + decision.currentMetrics.reach,
-      clicks: acc.clicks + decision.currentMetrics.clicks,
-      results: acc.results + decision.currentMetrics.results,
-    }),
-    { spend: 0, impressions: 0, reach: 0, clicks: 0, results: 0 }
-  );
 }
 
 function clientStatus(): { client: NonNullable<ReturnType<typeof getSupabaseServiceClient>> | null; status: MemoryStatus } {
@@ -58,7 +45,8 @@ export async function loadServiceBusinessGoals(accountId: string): Promise<{ goa
 export async function persistServiceIntelligenceMemory(decisionResult: DecisionEngineResult, suite: IntelligenceSuiteResult, _goals: BusinessGoals): Promise<MemoryStatus> {
   const auth = clientStatus();
   if (!auth.client) return auth.status;
-  const totals = campaignTotals(decisionResult.decisions);
+  const totals = decisionResult.accountMetrics;
+  if (!totals) throw new Error("No hay métricas agregadas verificadas de la cuenta; se omitió el snapshot histórico.");
   await ensureAccount(auth.client, decisionResult.accountId, decisionResult.currency);
   const { error: observationError } = await auth.client.from("account_period_observations").upsert({
     ad_account_id: decisionResult.accountId, period_from: decisionResult.from, period_to: decisionResult.to,

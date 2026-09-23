@@ -4,18 +4,85 @@ import { useEffect, useMemo, useState } from "react";
 import { useFilters } from "@/components/providers/filters-provider";
 import type { BusinessGoals, IntelligenceSuiteResult } from "@/lib/intelligence/types";
 
-const DEFAULT_GOALS: BusinessGoals = { riskTolerance: "balanced" };
-interface RequestState { key:string; result:IntelligenceSuiteResult|null; error:string|null }
-interface GoalsState { accountId:string; goals:BusinessGoals }
-function readGoals(accountId:string):BusinessGoals { if(typeof window==="undefined"||!accountId)return DEFAULT_GOALS; try{const raw=localStorage.getItem(`anlux:goals:${accountId}`);return raw?{...DEFAULT_GOALS,...JSON.parse(raw)}:DEFAULT_GOALS;}catch{return DEFAULT_GOALS;} }
+interface RequestState { key: string; result: IntelligenceSuiteResult | null; error: string | null }
+interface GoalsState { accountId: string; goals: BusinessGoals }
+const EMPTY_GOALS: BusinessGoals = {};
 
-export function useIntelligence(){
- const {clientId,dateRange}=useFilters();
- const [goalsState,setGoalsState]=useState<GoalsState>(()=>({accountId:clientId,goals:readGoals(clientId)}));
- const goals=goalsState.accountId===clientId?goalsState.goals:readGoals(clientId);
- const query=useMemo(()=>{const p=new URLSearchParams({accountId:clientId,from:dateRange.from,to:dateRange.to,risk:goals.riskTolerance??"balanced"});if(goals.targetCostPerResult!=null)p.set("targetCpr",String(goals.targetCostPerResult));if(goals.minimumRoas!=null)p.set("minRoas",String(goals.minimumRoas));if(goals.monthlyBudget!=null)p.set("monthlyBudget",String(goals.monthlyBudget));if(goals.grossMarginPercent!=null)p.set("margin",String(goals.grossMarginPercent));return p.toString();},[clientId,dateRange.from,dateRange.to,goals]);
- const key=`${clientId}|${query}`; const [state,setState]=useState<RequestState|null>(null);
- useEffect(()=>{if(!clientId)return;let cancelled=false;fetch(`/api/meta/intelligence?${query}`,{cache:"no-store"}).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error??"No se pudo calcular la inteligencia.");return data as IntelligenceSuiteResult;}).then(data=>{if(!cancelled)setState({key,result:data,error:null});}).catch(err=>{if(!cancelled)setState({key,result:null,error:err instanceof Error?err.message:"Error de inteligencia."});});return()=>{cancelled=true;};},[clientId,query,key]);
- function setGoals(next:BusinessGoals){setGoalsState({accountId:clientId,goals:next});if(clientId)localStorage.setItem(`anlux:goals:${clientId}`,JSON.stringify(next));}
- return {loading:Boolean(clientId)&&state?.key!==key,result:state?.key===key?state.result:null,error:state?.key===key?state.error:null,goals,setGoals};
+export function useIntelligence() {
+  const { clientId, dateRange } = useFilters();
+  const [goalsState, setGoalsState] = useState<GoalsState | null>(null);
+  const [goalsError, setGoalsError] = useState<string | null>(null);
+  const [savingGoals, setSavingGoals] = useState(false);
+  const goals = goalsState?.accountId === clientId ? goalsState.goals : EMPTY_GOALS;
+  const goalsLoaded = goalsState?.accountId === clientId;
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    fetch(`/api/meta/memory/goals?accountId=${encodeURIComponent(clientId)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("No se pudieron cargar las metas guardadas.");
+        return response.json();
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setGoalsState({ accountId: clientId, goals: payload.goals ?? {} });
+        setGoalsError(null);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setGoalsError(error instanceof Error ? error.message : "Error al cargar metas.");
+      });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ accountId: clientId, from: dateRange.from, to: dateRange.to });
+    if (goals.riskTolerance) params.set("risk", goals.riskTolerance);
+    if (goals.targetCostPerResult != null) params.set("targetCpr", String(goals.targetCostPerResult));
+    if (goals.minimumRoas != null) params.set("minRoas", String(goals.minimumRoas));
+    if (goals.monthlyBudget != null) params.set("monthlyBudget", String(goals.monthlyBudget));
+    if (goals.grossMarginPercent != null) params.set("margin", String(goals.grossMarginPercent));
+    return params.toString();
+  }, [clientId, dateRange.from, dateRange.to, goals]);
+  const key = `${clientId}|${query}`;
+  const [state, setState] = useState<RequestState | null>(null);
+  useEffect(() => {
+    if (!clientId || !goalsLoaded) return;
+    let cancelled = false;
+    fetch(`/api/meta/intelligence?${query}`, { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? "No se pudo calcular la inteligencia.");
+        return payload as IntelligenceSuiteResult;
+      })
+      .then((result) => { if (!cancelled) setState({ key, result, error: null }); })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ key, result: null, error: error instanceof Error ? error.message : "Error de inteligencia." });
+      });
+    return () => { cancelled = true; };
+  }, [clientId, goalsLoaded, query, key]);
+
+  function setGoals(next: BusinessGoals) {
+    setGoalsState({ accountId: clientId, goals: next });
+  }
+  async function saveGoals() {
+    if (!clientId || !goalsLoaded) return;
+    setSavingGoals(true);
+    setGoalsError(null);
+    try {
+      const response = await fetch("/api/meta/memory/goals", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: clientId, goals }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? payload.status?.message ?? "No se pudieron guardar las metas.");
+      setGoalsState({ accountId: clientId, goals: payload.goals });
+    } catch (error) {
+      setGoalsError(error instanceof Error ? error.message : "Error al guardar metas.");
+    } finally {
+      setSavingGoals(false);
+    }
+  }
+  return { loading: Boolean(clientId) && (!goalsLoaded || state?.key !== key), result: goalsLoaded && state?.key === key ? state.result : null,
+    error: goalsError ?? (goalsLoaded && state?.key === key ? state.error : null), goals, setGoals, saveGoals, savingGoals };
 }

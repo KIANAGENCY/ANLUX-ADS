@@ -66,6 +66,8 @@ export interface DecisionEngineResult {
   generatedAt: string;
   summary: DecisionEngineSummary;
   decisions: PerformanceDecision[];
+  /** Verified account-level totals from Meta; absent when Meta omits the account row. */
+  accountMetrics?: Pick<PerformanceMetrics, "spend" | "impressions" | "reach" | "clicks" | "results">;
 }
 
 export interface DecisionEntityInput {
@@ -89,4 +91,3 @@ export interface DecisionEntityInput {
   /** Account comparison value, present only when it comes from real account data. */
   accountAverageCpc?: number | null;
 }
-
