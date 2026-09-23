@@ -1,14 +1,16 @@
 # ANLUX Ads: revisión y puesta en producción de las correcciones
 
-Rama: `fix/audit-2026-09-23`. Este cambio no modifica campañas de Meta.
+Estado al 23 de septiembre de 2026. Estas correcciones no modifican campañas de Meta.
 
-## Al integrar
+## Completado
 
-1. Ejecutar la migración `20260923160953_harden_member_rls.sql` en un entorno de prueba, comprobar políticas SELECT/INSERT/UPDATE como miembro y rechazo para `anon`, y después aplicarla en producción mediante el flujo de migraciones. Confirmar Security y Performance Advisors. No se aplicó desde esta rama.
-2. En Supabase Auth, activar **Leaked Password Protection** y comprobar el inicio de sesión y la recuperación de contraseña. Es una configuración del proyecto, no una migración SQL.
-3. Tras desplegar, comprobar `/api/meta/health/monitor` con sesión ANLUX: 200 cuando Meta responde y 503 cuando una dependencia falla. `/api/meta/health` conserva su respuesta legible para Configuración.
-4. Verificar en Today que una carga no llama `/api/ai/analyze` por campaña. Confirmar que las metas cargan desde Supabase y que el botón «Guardar metas» persiste entre navegadores.
-5. Volver a consultar, con una sesión autorizada, los seis periodos que ya figuran en `account_period_observations` para sobrescribir sus totales anteriores con insights agregados de cuenta. Registrar los rangos antes de la migración y comparar gasto, impresiones, alcance, clics y resultados con Meta. Si Meta omite el agregado de cuenta, el periodo no se sobreescribe y requiere revisión manual. No inferir que el histórico antiguo está corregido solo por desplegar el código.
-6. Comprobar el cron diario, las recomendaciones, el acceso por roles y las políticas de seguridad tras el despliegue.
+- Migraciones de Supabase `20260923163033_harden_member_rls.sql` y `20260923163135_move_membership_helper_private.sql` aplicadas en ANLUX. `anon` no puede ejecutar la función de membresía; `authenticated` la usa para RLS, pero ya no existe el RPC en el esquema público.
+- Security Advisor ya no reporta la función; Performance Advisor ya no reporta foreign keys sin índice ni políticas con `auth.uid()` por fila. Los tres avisos de índices sin uso son informativos con el volumen actual.
+
+## Pendiente por limitación de acceso o plan
+
+1. **Leaked Password Protection** requiere Supabase Pro o superior. La organización ANLUX está en Free. No se cambió la suscripción ni se simuló una protección equivalente. Una actualización de plan implica un pago y requiere un límite de gasto autorizado.
+2. Las seis observaciones antiguas (rangos `2026-08-18` a `2026-09-16`, `2026-08-19` a `2026-09-17`, `2026-08-21` a `2026-09-19`, `2026-08-22` a `2026-09-20`, `2026-08-23` a `2026-09-21` y `2026-08-24` a `2026-09-22`) siguen con sumas de decisiones. Para corregirlas, consultar `/api/meta/intelligence` por cada rango con sesión ANLUX autorizada y comprobar el resultado contra Meta. El intento de inicio de sesión automatizado fue rechazado por credenciales incorrectas. No alterar las filas manualmente ni tratarlas como verificadas.
+3. Confirmar en una sesión ANLUX que `/api/meta/health/monitor` refleja 200/503 según Meta, las metas persisten entre navegadores y Today no genera solicitudes de IA por campaña.
 
 La pantalla «Conversaciones iniciadas» muestra atribución y conteos, no el contenido de los chats. Leer mensajes exige una integración distinta y permisos explícitos; no está implementada en esta rama.
