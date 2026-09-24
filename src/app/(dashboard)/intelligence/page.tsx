@@ -58,8 +58,8 @@ function HistoricalSave() {
   return <Card className="p-5"><h3 className="text-sm font-semibold">Actualizar un periodo histórico</h3>
     <p className="mt-1 text-xs text-muted-foreground">Calcula nuevamente sus métricas y decisiones con los datos actuales de Meta. Los periodos se guardan solo al confirmar.</p>
     <form onSubmit={(event)=>void save(event)} className="mt-3 flex flex-wrap items-end gap-3">
-      <label className="space-y-1 text-xs text-muted-foreground"><span>Desde</span><input type="date" required value={from} onChange={(event)=>setFrom(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
-      <label className="space-y-1 text-xs text-muted-foreground"><span>Hasta</span><input type="date" required min={from || undefined} value={to} onChange={(event)=>setTo(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
+      <label className="space-y-1 text-xs text-muted-foreground"><span>Desde (AAAA-MM-DD)</span><input type="text" inputMode="numeric" placeholder="2026-08-25" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" maxLength={10} required value={from} onChange={(event)=>setFrom(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
+      <label className="space-y-1 text-xs text-muted-foreground"><span>Hasta (AAAA-MM-DD)</span><input type="text" inputMode="numeric" placeholder="2026-09-23" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" maxLength={10} required value={to} onChange={(event)=>setTo(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
       <button type="submit" disabled={!clientId || saving} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? "Actualizando…" : "Guardar periodo"}</button>
     </form>
     {status && <p role="status" className="mt-2 text-xs text-muted-foreground">{status}</p>}
