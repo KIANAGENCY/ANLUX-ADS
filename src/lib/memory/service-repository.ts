@@ -48,12 +48,7 @@ export async function persistServiceIntelligenceMemory(decisionResult: DecisionE
   const totals = decisionResult.accountMetrics;
   if (!totals) throw new Error("No hay métricas agregadas verificadas de la cuenta; se omitió el snapshot histórico.");
   await ensureAccount(auth.client, decisionResult.accountId, decisionResult.currency);
-  const { error: observationError } = await auth.client.from("account_period_observations").upsert({
-    ad_account_id: decisionResult.accountId, period_from: decisionResult.from, period_to: decisionResult.to,
-    spend: totals.spend, impressions: totals.impressions, reach: totals.reach, clicks: totals.clicks, results: totals.results,
-    decision_summary: decisionResult.summary, forecast: suite.forecast, captured_at: new Date().toISOString(),
-  }, { onConflict: "ad_account_id,period_from,period_to" });
-  if (observationError) throw observationError;
+  const capturedAt = new Date().toISOString();
   if (decisionResult.decisions.length) {
     const rows = decisionResult.decisions.map((decision) => ({
       ad_account_id: decisionResult.accountId, period_from: decisionResult.from, period_to: decisionResult.to,
@@ -61,12 +56,18 @@ export async function persistServiceIntelligenceMemory(decisionResult: DecisionE
       campaign_id: decision.campaignId, objective: decision.objective, action: decision.action, score: decision.score,
       confidence: decision.confidence, risk: decision.risk, suggested_change_percent: decision.suggestedChangePercent,
       rationale: decision.rationale, evidence: decision.signals, metrics_current: decision.currentMetrics,
-      metrics_previous: decision.previousMetrics, generated_at: decision.generatedAt,
+      metrics_previous: decision.previousMetrics, generated_at: decision.generatedAt, stored_at: capturedAt,
     }));
     const { error } = await auth.client.from("decision_history").upsert(rows, {
-      onConflict: "ad_account_id,period_from,period_to,entity_type,entity_id,action,score", ignoreDuplicates: true,
+      onConflict: "ad_account_id,period_from,period_to,entity_type,entity_id",
     });
     if (error) throw error;
   }
+  const { error: observationError } = await auth.client.from("account_period_observations").upsert({
+    ad_account_id: decisionResult.accountId, period_from: decisionResult.from, period_to: decisionResult.to,
+    spend: totals.spend, impressions: totals.impressions, reach: totals.reach, clicks: totals.clicks, results: totals.results,
+    decision_summary: decisionResult.summary, forecast: suite.forecast, captured_at: capturedAt,
+  }, { onConflict: "ad_account_id,period_from,period_to" });
+  if (observationError) throw observationError;
   return auth.status;
 }

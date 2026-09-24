@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateRealDecisions } from "@/lib/decisions/real-engine";
 import { buildIntelligenceSuite } from "@/lib/intelligence/engine";
 import type { BusinessGoals } from "@/lib/intelligence/types";
-import { loadBusinessGoals, persistIntelligenceMemory, type MemoryStatus } from "@/lib/memory/repository";
+import { getMemoryStatus, loadBusinessGoals, persistIntelligenceMemory, type MemoryStatus } from "@/lib/memory/repository";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { parseAccountRangeParams } from "@/lib/meta/real/request-params";
 
@@ -12,7 +12,7 @@ function numberOrNull(value: string | null): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-export async function GET(req: NextRequest) {
+async function evaluate(req: NextRequest, save: boolean) {
   const parsed = parseAccountRangeParams(req.nextUrl.searchParams);
   if (!parsed.ok) return parsed.response;
 
@@ -45,9 +45,11 @@ export async function GET(req: NextRequest) {
 
     let memory: MemoryStatus;
     try {
-      memory = await persistIntelligenceMemory(decisionResult, suite, goals);
+      memory = save
+        ? await persistIntelligenceMemory(decisionResult, suite, goals)
+        : await getMemoryStatus();
     } catch (error) {
-      console.error("No se pudo persistir la memoria histórica de ANLUX.", error);
+      console.error(save ? "No se pudo persistir la memoria histórica de ANLUX." : "No se pudo consultar el estado de memoria.", error);
       memory = {
         state: "unavailable",
         enabled: true,
@@ -59,4 +61,14 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return metaErrorResponse(error);
   }
+}
+
+// Reading Intelligence must never change historical observations or decisions.
+export async function GET(req: NextRequest) {
+  return evaluate(req, false);
+}
+
+// Only an explicit same-origin, authenticated action writes a fresh snapshot.
+export async function POST(req: NextRequest) {
+  return evaluate(req, true);
 }

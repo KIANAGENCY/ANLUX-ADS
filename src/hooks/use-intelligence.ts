@@ -13,6 +13,8 @@ export function useIntelligence() {
   const [goalsState, setGoalsState] = useState<GoalsState | null>(null);
   const [goalsError, setGoalsError] = useState<string | null>(null);
   const [savingGoals, setSavingGoals] = useState(false);
+  const [savingMemory, setSavingMemory] = useState(false);
+  const [memorySavedKey, setMemorySavedKey] = useState<string | null>(null);
   const goals = goalsState?.accountId === clientId ? goalsState.goals : EMPTY_GOALS;
   const goalsLoaded = goalsState?.accountId === clientId;
 
@@ -83,6 +85,25 @@ export function useIntelligence() {
       setSavingGoals(false);
     }
   }
+  async function saveMemory() {
+    if (!clientId || !goalsLoaded || savingMemory) return;
+    setSavingMemory(true);
+    try {
+      const response = await fetch(`/api/meta/intelligence?${query}`, { method: "POST", cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo actualizar la memoria.");
+      if (payload.memory?.state !== "ready") throw new Error(payload.memory?.message ?? "No se pudo guardar la memoria.");
+      setState({ key, result: payload as IntelligenceSuiteResult, error: null });
+      setMemorySavedKey(key);
+    } catch (error) {
+      setMemorySavedKey(null);
+      setState((current) => ({ key, result: current?.key === key ? current.result : null,
+        error: error instanceof Error ? error.message : "Error al guardar la memoria." }));
+    } finally {
+      setSavingMemory(false);
+    }
+  }
   return { loading: Boolean(clientId) && (!goalsLoaded || state?.key !== key), result: goalsLoaded && state?.key === key ? state.result : null,
-    error: goalsError ?? (goalsLoaded && state?.key === key ? state.error : null), goals, setGoals, saveGoals, savingGoals };
+    error: goalsError ?? (goalsLoaded && state?.key === key ? state.error : null), goals, setGoals, saveGoals, savingGoals, saveMemory, savingMemory,
+    memorySaved: memorySavedKey === key };
 }

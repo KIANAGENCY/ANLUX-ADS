@@ -36,6 +36,8 @@ jobs:
         run: node scripts/test-memory-safety.mjs
       - name: Account snapshot regression
         run: node scripts/test-audit-regressions.mjs
+      - name: Memory refresh regression
+        run: node scripts/test-memory-refresh.mjs
       - name: Messaging attribution tests
         run: node scripts/test-messaging.mjs
       - name: Meta data quality tests

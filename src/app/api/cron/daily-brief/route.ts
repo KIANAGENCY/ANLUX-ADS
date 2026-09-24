@@ -29,7 +29,7 @@ function dailyEmail(sections: Array<{ name: string; headline: string; attention:
 }
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.ANLUX_CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET;
   const recipient = process.env.ANLUX_BRIEF_RECIPIENT;
   const resendKey = process.env.RESEND_API_KEY;
   if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
@@ -65,4 +65,3 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: "Resend no pudo enviar el informe." }, { status: 502 });
   return NextResponse.json({ ok: true, id: data?.id ?? null, accounts: sections.length });
 }
-

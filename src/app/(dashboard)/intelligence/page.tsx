@@ -8,11 +8,12 @@ import { useIntelligence } from "@/hooks/use-intelligence";
 import type { BusinessGoals } from "@/lib/intelligence/types";
 
 export default function IntelligencePage() {
-  const { loading, result, error, goals, setGoals, saveGoals, savingGoals } = useIntelligence();
+  const { loading, result, error, goals, setGoals, saveGoals, savingGoals, saveMemory, savingMemory, memorySaved } = useIntelligence();
   return <div className="space-y-5">
     <Card className="p-5"><div className="flex gap-3"><BrainCircuit className="mt-0.5 size-5 text-accent-light"/><div><h2 className="font-semibold">Intelligence Command Center</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Contexto de negocio + Decision Engine + anomalías + presupuesto + creativos + experimentos + forecasting. Todo permanece en modo recomendación: ANLUX no escribe en Meta.</p></div></div></Card>
     <Goals goals={goals} onChange={setGoals} onSave={saveGoals} saving={savingGoals}/>
     {error && <ErrorBanner message={error}/>} {loading && <Skeleton className="h-48 w-full rounded-xl"/>}
+    {result && <div className="flex flex-wrap items-center gap-3"><button type="button" onClick={()=>void saveMemory()} disabled={savingMemory} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{savingMemory ? "Actualizando…" : "Guardar análisis en memoria"}</button><p role="status" className="text-xs text-muted-foreground">{memorySaved ? "Análisis y decisiones guardados para este periodo." : "El análisis se consulta sin alterar el histórico. Guarda este periodo cuando quieras actualizar sus métricas y decisiones."}</p></div>}
     {result && <>
       <div className="grid gap-3 md:grid-cols-3"><Mini icon={ShieldCheck} title="Brief ejecutivo" text={result.brief.headline}/><Mini icon={Gauge} title="Forecast" text={result.forecast.projectedResults == null ? result.forecast.warning ?? "Sin proyección" : `Resultados proyectados: ${result.forecast.projectedResults} (incertidumbre ±${result.forecast.uncertaintyPercent}%).`}/><Mini icon={Sparkles} title="Modo" text="Recommend-only · ninguna acción automática en Meta"/></div>
       <Section title="Atención prioritaria" icon={Lightbulb} items={result.brief.attention}/>
