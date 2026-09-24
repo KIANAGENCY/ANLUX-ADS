@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import { BrainCircuit, FlaskConical, Gauge, Lightbulb, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import { useFilters } from "@/components/providers/filters-provider";
 import { Card } from "@/components/ui/card";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +16,7 @@ export default function IntelligencePage() {
     <Goals goals={goals} onChange={setGoals} onSave={saveGoals} saving={savingGoals}/>
     {error && <ErrorBanner message={error}/>} {loading && <Skeleton className="h-48 w-full rounded-xl"/>}
     {result && <div className="flex flex-wrap items-center gap-3"><button type="button" onClick={()=>void saveMemory()} disabled={savingMemory} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{savingMemory ? "Actualizando…" : "Guardar análisis en memoria"}</button><p role="status" className="text-xs text-muted-foreground">{memorySaved ? "Análisis y decisiones guardados para este periodo." : "El análisis se consulta sin alterar el histórico. Guarda este periodo cuando quieras actualizar sus métricas y decisiones."}</p></div>}
+    <HistoricalSave/>
     {result && <>
       <div className="grid gap-3 md:grid-cols-3"><Mini icon={ShieldCheck} title="Brief ejecutivo" text={result.brief.headline}/><Mini icon={Gauge} title="Forecast" text={result.forecast.projectedResults == null ? result.forecast.warning ?? "Sin proyección" : `Resultados proyectados: ${result.forecast.projectedResults} (incertidumbre ±${result.forecast.uncertaintyPercent}%).`}/><Mini icon={Sparkles} title="Modo" text="Recommend-only · ninguna acción automática en Meta"/></div>
       <Section title="Atención prioritaria" icon={Lightbulb} items={result.brief.attention}/>
@@ -24,6 +27,43 @@ export default function IntelligencePage() {
       <Section title="Protecciones de aprendizaje" icon={ShieldCheck} items={result.learningGuards.filter(g=>g.blocked).slice(0,10).map(g=>`${g.entityName}: ${g.reason}`)}/>
     </>}
   </div>;
+}
+
+function HistoricalSave() {
+  const { clientId } = useFilters();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clientId || saving) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      const query = new URLSearchParams({ accountId: clientId, from, to });
+      const response = await fetch(`/api/meta/intelligence?${query}`, { method: "POST", cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo calcular el periodo.");
+      if (payload.memory?.state !== "ready") throw new Error(payload.memory?.message ?? "No se pudo guardar el periodo.");
+      setStatus(`Periodo ${from} a ${to} guardado con ${payload.decisions.length} decisiones.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "No se pudo guardar el periodo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <Card className="p-5"><h3 className="text-sm font-semibold">Actualizar un periodo histórico</h3>
+    <p className="mt-1 text-xs text-muted-foreground">Calcula nuevamente sus métricas y decisiones con los datos actuales de Meta. Los periodos se guardan solo al confirmar.</p>
+    <form onSubmit={(event)=>void save(event)} className="mt-3 flex flex-wrap items-end gap-3">
+      <label className="space-y-1 text-xs text-muted-foreground"><span>Desde</span><input type="date" required value={from} onChange={(event)=>setFrom(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
+      <label className="space-y-1 text-xs text-muted-foreground"><span>Hasta</span><input type="date" required min={from || undefined} value={to} onChange={(event)=>setTo(event.target.value)} className="block min-h-11 rounded-lg border border-border-subtle bg-surface-2 px-3 text-sm text-foreground"/></label>
+      <button type="submit" disabled={!clientId || saving} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? "Actualizando…" : "Guardar periodo"}</button>
+    </form>
+    {status && <p role="status" className="mt-2 text-xs text-muted-foreground">{status}</p>}
+  </Card>;
 }
 
 function Goals({goals,onChange,onSave,saving}:{goals:BusinessGoals;onChange:(g:BusinessGoals)=>void;onSave:()=>Promise<void>;saving:boolean}) {
