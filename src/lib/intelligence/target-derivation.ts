@@ -2,6 +2,8 @@ export interface TargetDerivationObservation {
   periodFrom: string;
   periodTo: string;
   objective: string | null | undefined;
+  resultType?: string | null;
+  resultsAvailable?: boolean | null;
   costPerResult: number | null | undefined;
   results: number | null | undefined;
 }
@@ -13,12 +15,13 @@ export interface TargetProposal {
 }
 
 /**
- * Proposes the 25th percentile of real MESSAGES observations. It deliberately
+ * Proposes the 25th percentile of verified messaging observations. It deliberately
  * returns null instead of normalising weak or incomplete historical evidence.
  */
 export function deriveMessagingTarget(observations: readonly TargetDerivationObservation[]): TargetProposal | null {
   const eligible = observations.filter((observation) =>
-    observation.objective === "MESSAGES" &&
+    observation.resultType === "onsite_conversion.messaging_conversation_started_7d" &&
+    observation.resultsAvailable === true &&
     Number.isFinite(observation.costPerResult) &&
     (observation.costPerResult ?? 0) > 0 &&
     Number.isFinite(observation.results) &&

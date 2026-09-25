@@ -15,10 +15,13 @@ const efficient = campaign("A", 12.88, 34, 13, 10);
 const expensive = campaign("B", 19.93, 37, 20, 11);
 const recommendations = recommendPortfolio([efficient, expensive, { ...efficient, entityType: "ad", entityId: "A-ad" }], "MXN");
 assert.equal(recommendations.length, 1, "campaign/ad hierarchy must not be double counted");
-assert.equal(recommendations[0].action, "TEST_REALLOCATION");
+assert.equal(recommendations[0].action, "COMPARE_QUALITY", "Meta cost alone must not justify reallocating budget");
 assert.equal(recommendations[0].toCampaignId, "A");
 assert.equal(recommendations[0].fromCampaignId, "B");
 assert.match(recommendations[0].nextStep, /10%/);
+const qualified = recommendPortfolio([{ ...efficient, qualifiedConversations: 20 }, { ...expensive, qualifiedConversations: 10 }], "MXN");
+assert.equal(qualified[0].action, "TEST_REALLOCATION", "verified comparable lead quality can support a guarded test");
+assert.equal(recommendPortfolio([{ ...efficient, qualifiedConversations: 2 }, { ...expensive, qualifiedConversations: 10 }], "MXN")[0].action, "COMPARE_QUALITY");
 
 assert.equal(recommendPortfolio([efficient, { ...expensive, resultType: "purchase" }], "MXN").length, 0,
   "a message must not be compared with a purchase");

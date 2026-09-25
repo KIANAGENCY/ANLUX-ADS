@@ -103,7 +103,14 @@ export function useIntelligence() {
       setSavingMemory(false);
     }
   }
+  async function refresh() {
+    if (!clientId || !goalsLoaded) return;
+    const response = await fetch(`/api/meta/intelligence?${query}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error ?? "No se pudo actualizar el análisis.");
+    setState({ key, result: payload as IntelligenceSuiteResult, error: null });
+  }
   return { loading: Boolean(clientId) && (!goalsLoaded || state?.key !== key), result: goalsLoaded && state?.key === key ? state.result : null,
-    error: goalsError ?? (goalsLoaded && state?.key === key ? state.error : null), goals, setGoals, saveGoals, savingGoals, saveMemory, savingMemory,
+    error: goalsError ?? (goalsLoaded && state?.key === key ? state.error : null), goals, setGoals, saveGoals, savingGoals, saveMemory, savingMemory, refresh,
     memorySaved: memorySavedKey === key };
 }

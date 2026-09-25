@@ -66,6 +66,7 @@ const observationWrite = operations.find((entry) => entry.table === "account_per
 assert.equal(decisionWrite.options.onConflict, "ad_account_id,period_from,period_to,entity_type,entity_id");
 assert.equal(decisionWrite.options.ignoreDuplicates, undefined);
 assert.equal(decisionWrite.rows[0].stored_at, observationWrite.rows.captured_at);
+assert.equal(decisionWrite.rows[0].current_results_available, false, "unknown historical outcome must remain unavailable");
 assert.ok(operations.indexOf(decisionWrite) < operations.indexOf(observationWrite));
 
 const cron = load("src/app/api/cron/daily-brief/route.ts", {

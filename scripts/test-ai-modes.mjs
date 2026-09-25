@@ -199,6 +199,12 @@ async function main() {
     process.exit(1);
   }
 
+  if (process.env.CI_UNAUTHENTICATED === "1") {
+    const response = await post({ mode: "general", question: "Consulta de prueba" });
+    assert(response.status === 401 || response.status === 503, "el analista rechaza solicitudes sin sesión", `status=${response.status}`);
+    process.exit(failed === 0 ? 0 : 1);
+  }
+
   await testGeneralQuestion();
   await testPerformanceWithData();
   await testPerformanceMissingRange();

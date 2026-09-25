@@ -160,6 +160,12 @@ async function main() {
     process.exit(1);
   }
 
+  if (process.env.CI_UNAUTHENTICATED === "1") {
+    const response = await get();
+    assert(response.status === 401 || response.status === 503, "el diagnóstico de Meta rechaza solicitudes sin sesión", `status=${response.status}`);
+    process.exit(failed === 0 ? 0 : 1);
+  }
+
   const report = await testContract();
   await testNoSecretLeak();
   await testCoherence(report);

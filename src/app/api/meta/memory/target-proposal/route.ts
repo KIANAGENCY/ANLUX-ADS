@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (!client) return NextResponse.json({ error: "Supabase no está configurado." }, { status: 503 });
 
   const { data, error } = await client.from("decision_history")
-    .select("period_from,period_to,objective,metrics_current")
+    .select("period_from,period_to,objective,result_type,current_results_available,metrics_current")
     .eq("ad_account_id", accountId)
     .eq("entity_type", "campaign");
   if (error) return NextResponse.json({ error: "No se pudo consultar el historial real." }, { status: 503 });
@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
       periodFrom: row.period_from,
       periodTo: row.period_to,
       objective: row.objective,
+      resultType: row.result_type,
+      resultsAvailable: row.current_results_available,
       costPerResult: typeof metrics.costPerResult === "number" ? metrics.costPerResult : null,
       results: typeof metrics.results === "number" ? metrics.results : null,
     };

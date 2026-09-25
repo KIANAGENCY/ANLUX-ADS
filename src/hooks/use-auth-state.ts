@@ -13,6 +13,7 @@ export function useAuthState(): AuthStatus {
   useEffect(() => {
     let cancelled = false;
 
+    let unsubscribe: (() => void) | undefined;
     async function check() {
       if (!isSupabaseConfigured()) {
         if (!cancelled) setStatus("unauthenticated");
@@ -25,6 +26,11 @@ export function useAuthState(): AuthStatus {
         return;
       }
 
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!cancelled) setStatus(session ? "authenticated" : "unauthenticated");
+      });
+      unsubscribe = () => listener.subscription.unsubscribe();
+
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       setStatus(data.session ? "authenticated" : "unauthenticated");
@@ -33,6 +39,7 @@ export function useAuthState(): AuthStatus {
     check();
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, []);
 

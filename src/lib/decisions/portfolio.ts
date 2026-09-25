@@ -33,7 +33,13 @@ export function recommendPortfolio(decisions: readonly PerformanceDecision[], cu
     );
     const stable = hasComparableHistory &&
       to.previousMetrics.costPerResult <= from.previousMetrics.costPerResult * 1.1;
-    const action = stable ? "TEST_REALLOCATION" : "COMPARE_QUALITY";
+    // Meta-only cost does not establish the quality of the conversations.
+    // A budget test is allowed only when both campaigns have comparable human evidence.
+    const toQualified = to.qualifiedConversations ?? null;
+    const fromQualified = from.qualifiedConversations ?? null;
+    const comparableQuality = toQualified !== null && fromQualified !== null && toQualified >= 5 && fromQualified >= 5 &&
+      to.currentMetrics.spend / toQualified < from.currentMetrics.spend / fromQualified * 0.8;
+    const action = stable && comparableQuality ? "TEST_REALLOCATION" : "COMPARE_QUALITY";
     const money = (amount: number) => `${amount.toLocaleString("es-MX", { maximumFractionDigits: 2 })} ${currency ?? "en moneda de la cuenta"}`;
     recommendations.push({
       id: `portfolio:${from.entityId}:${to.entityId}`,

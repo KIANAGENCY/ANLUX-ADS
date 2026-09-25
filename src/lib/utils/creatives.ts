@@ -13,11 +13,11 @@ export interface CreativeWinner {
  * destaca en más de una métrica.
  */
 export function computeCreativeWinners(ads: AdWithMetrics[]): CreativeWinner[] {
-  const withImpressions = ads.filter((a) => a.metrics.impressions > 0);
+  const withImpressions = ads.filter((a) => a.metrics.impressions >= 1_000);
   if (withImpressions.length === 0) return [];
 
-  const withClicks = withImpressions.filter((a) => a.metrics.clicks > 0);
-  const withResults = withImpressions.filter((a) => a.metrics.results > 0);
+  const withClicks = withImpressions.filter((a) => a.metrics.clicks >= 30 && a.metrics.cpc > 0);
+  const withResults = withImpressions.filter((a) => a.metrics.results >= 10 && a.metrics.costPerResult > 0);
 
   const bestCtr = maxBy(withImpressions, (a) => a.metrics.ctr);
   const bestCpc = minBy(withClicks, (a) => a.metrics.cpc);

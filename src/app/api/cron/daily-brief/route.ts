@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   const sections = [] as Array<{ name: string; headline: string; attention: string[]; healthy: string[] }>;
   for (const account of accounts) {
     const { goals } = await loadServiceBusinessGoals(account.id);
-    const decisions = await generateRealDecisions(account.id, range, { targetCostPerResult: goals?.targetCostPerResult ?? null });
+    const decisions = await generateRealDecisions(account.id, range, { targetCostPerResult: goals?.targetCostPerResult ?? null, service: true });
     const suite = buildIntelligenceSuite(decisions.decisions, goals ?? {}, decisions.portfolioRecommendations);
     try {
       await persistServiceIntelligenceMemory(decisions, suite, goals ?? {});
