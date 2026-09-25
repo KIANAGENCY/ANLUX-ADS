@@ -1,30 +1,49 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { BrainCircuit, FlaskConical, Gauge, Lightbulb, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BrainCircuit, ShieldCheck } from "lucide-react";
 import { useFilters } from "@/components/providers/filters-provider";
 import { Card } from "@/components/ui/card";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIntelligence } from "@/hooks/use-intelligence";
 import type { BusinessGoals } from "@/lib/intelligence/types";
+import type { PerformanceDecision } from "@/lib/decisions/types";
+
+const ACTION_LABELS: Record<PerformanceDecision["action"], string> = {
+  SCALE: "Oportunidad de crecimiento", MAINTAIN: "Mantener", WATCH: "Observar",
+  REDUCE: "Revisar inversión", PAUSE_CANDIDATE: "Revisar continuidad",
+  REFRESH_CREATIVE: "Actualizar creativo", REVIEW_AUDIENCE: "Revisar audiencia",
+  INSUFFICIENT_DATA: "Datos insuficientes",
+};
+const ACTIONABLE = new Set<PerformanceDecision["action"]>(["REDUCE", "PAUSE_CANDIDATE", "REFRESH_CREATIVE", "REVIEW_AUDIENCE", "SCALE"]);
+const PRIORITY: Record<PerformanceDecision["action"], number> = {
+  PAUSE_CANDIDATE: 0, REDUCE: 1, REFRESH_CREATIVE: 2, REVIEW_AUDIENCE: 3,
+  SCALE: 4, WATCH: 5, MAINTAIN: 6, INSUFFICIENT_DATA: 7,
+};
 
 export default function IntelligencePage() {
   const { loading, result, error, goals, setGoals, saveGoals, savingGoals, saveMemory, savingMemory, memorySaved } = useIntelligence();
+  const { dateRange, currency } = useFilters();
+  // Campaigns, sets and ads share the same spend. Show one recommendation per
+  // campaign in this overview; the Decisions page retains every entity.
+  const proposals = result ? [...result.decisions]
+    .filter((decision) => ACTIONABLE.has(decision.action) && decision.confidence !== "low"
+      && !result.learningGuards.some((guard) => guard.entityId === decision.entityId && guard.blocked))
+    .sort((a, b) => PRIORITY[a.action] - PRIORITY[b.action])
+    .filter((decision, index, all) => all.findIndex((item) => item.campaignId === decision.campaignId) === index)
+    .slice(0, 3) : [];
   return <div className="space-y-5">
-    <Card className="p-5"><div className="flex gap-3"><BrainCircuit className="mt-0.5 size-5 text-accent-light"/><div><h2 className="font-semibold">Intelligence Command Center</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Contexto de negocio + Decision Engine + anomalías + presupuesto + creativos + experimentos + forecasting. Todo permanece en modo recomendación: ANLUX no escribe en Meta.</p></div></div></Card>
-    <Goals goals={goals} onChange={setGoals} onSave={saveGoals} saving={savingGoals}/>
+    <Card className="p-5"><div className="flex gap-3"><BrainCircuit className="mt-0.5 size-5 shrink-0 text-accent-light"/><div><h2 className="font-semibold">Resumen para decidir</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Cuenta y periodo seleccionados: {dateRange.from} al {dateRange.to}. Recomendaciones basadas en datos de Meta; ninguna cambia las campañas automáticamente.</p></div></div></Card>
     {error && <ErrorBanner message={error}/>} {loading && <Skeleton className="h-48 w-full rounded-xl"/>}
-    {result && <div className="flex flex-wrap items-center gap-3"><button type="button" onClick={()=>void saveMemory()} disabled={savingMemory} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{savingMemory ? "Actualizando…" : "Guardar análisis en memoria"}</button><p role="status" className="text-xs text-muted-foreground">{memorySaved ? "Análisis y decisiones guardados para este periodo." : "El análisis se consulta sin alterar el histórico. Guarda este periodo cuando quieras actualizar sus métricas y decisiones."}</p></div>}
-    <HistoricalSave/>
     {result && <>
-      <div className="grid gap-3 md:grid-cols-3"><Mini icon={ShieldCheck} title="Brief ejecutivo" text={result.brief.headline}/><Mini icon={Gauge} title="Forecast" text={result.forecast.projectedResults == null ? result.forecast.warning ?? "Sin proyección" : `Resultados proyectados: ${result.forecast.projectedResults} (incertidumbre ±${result.forecast.uncertaintyPercent}%).`}/><Mini icon={Sparkles} title="Modo" text="Recommend-only · ninguna acción automática en Meta"/></div>
-      <Section title="Atención prioritaria" icon={Lightbulb} items={result.brief.attention}/>
-      <Section title={`Anomalías (${result.anomalies.length})`} icon={Gauge} items={result.anomalies.slice(0,10).map(a=>`${a.entityName}: ${a.message}`)}/>
-      <Section title={`Budget Optimizer (${result.budgetRecommendations.length})`} icon={WalletCards} items={result.budgetRecommendations.map(b=>b.rationale)}/>
-      <Section title={`Creative Intelligence (${result.creativeInsights.length})`} icon={Sparkles} items={result.creativeInsights.slice(0,10).map(c=>`${c.adName} · ${c.status}: ${c.message}`)}/>
-      <Section title={`Experiment Engine (${result.experiments.length})`} icon={FlaskConical} items={result.experiments.map(e=>`${e.entityName}: ${e.hypothesis} Métrica: ${e.successMetric}.`)}/>
-      <Section title="Protecciones de aprendizaje" icon={ShieldCheck} items={result.learningGuards.filter(g=>g.blocked).slice(0,10).map(g=>`${g.entityName}: ${g.reason}`)}/>
+      <div className="grid gap-3 sm:grid-cols-3"><Stat label="Campañas destacadas" value={proposals.length}/><Stat label="Alertas críticas" value={result.anomalies.filter(a=>a.severity === "critical").length}/><Stat label="Entidades protegidas por poca evidencia" value={result.learningGuards.filter(g=>g.blocked).length}/></div>
+      <section aria-labelledby="recommendations-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="recommendations-heading" className="font-semibold">Qué revisar ahora</h3><p className="mt-1 text-sm text-muted-foreground">Hasta tres campañas distintas, ordenadas por prioridad. Revisa los datos antes de actuar.</p></div><Link href="/decisions" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent-light">Ver todas las decisiones <ArrowRight className="size-4"/></Link></div>
+        {proposals.length ? proposals.map((decision) => <Card key={decision.id} className="p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-foreground">{decision.campaignName}</p><span className="rounded-full border border-border-subtle px-3 py-1 text-xs text-accent-light">{ACTION_LABELS[decision.action]}</span></div><p className="mt-2 text-sm leading-6 text-muted-foreground">{decision.entityType === "campaign" ? "Campaña" : decision.entityType === "adset" ? "Conjunto" : "Anuncio"}: {decision.entityName}</p><p className="mt-1 text-sm leading-6 text-foreground">{decision.rationale}</p><p className="mt-2 text-xs text-muted-foreground">Confianza {decision.confidence === "high" ? "alta" : "media"} · Resultados: {decision.currentResultsAvailable === false ? "no disponibles para este objetivo" : decision.currentMetrics.results} · Inversión: {decision.currentMetrics.spend.toLocaleString("es-MX", { maximumFractionDigits: 2 })}{currency ? ` ${currency}` : ""}</p></Card>) : <Card className="p-5"><ShieldCheck className="size-5 text-accent-light"/><p className="mt-2 text-sm font-semibold">Sin acciones con evidencia suficiente para este periodo</p><p className="mt-1 text-sm text-muted-foreground">Puedes explorar todas las decisiones, incluidas las que requieren más datos, sin modificar Meta.</p></Card>}
+      </section>
+      <details className="rounded-xl border border-border-subtle bg-surface p-5"><summary className="cursor-pointer text-sm font-semibold">Configurar metas y guardar análisis</summary><div className="mt-4 space-y-5"><Goals goals={goals} onChange={setGoals} onSave={saveGoals} saving={savingGoals}/><div className="flex flex-wrap items-center gap-3"><button type="button" onClick={()=>void saveMemory()} disabled={savingMemory} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{savingMemory ? "Actualizando…" : "Guardar análisis actual"}</button><p role="status" className="text-xs text-muted-foreground">{memorySaved ? "Análisis y decisiones guardados para este periodo." : "Guarda este periodo cuando quieras actualizar su historial en Supabase."}</p></div><HistoricalSave/></div></details>
     </>}
   </div>;
 }
@@ -70,5 +89,4 @@ function Goals({goals,onChange,onSave,saving}:{goals:BusinessGoals;onChange:(g:B
   const field=(key:keyof BusinessGoals,label:string)=><label className="space-y-1 text-xs text-muted-foreground"><span>{label}</span><input className="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-foreground" type="number" min="0" value={(goals[key] as number|null|undefined) ?? ""} onChange={e=>onChange({...goals,[key]:e.target.value===""?null:Number(e.target.value)})}/></label>;
   return <Card className="p-5"><h3 className="mb-3 text-sm font-semibold">Metas del negocio</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{field("targetCostPerResult","CPA/CPL objetivo")}{field("minimumRoas","ROAS mínimo")}{field("monthlyBudget","Presupuesto mensual")}{field("grossMarginPercent","Margen bruto %")}<label className="space-y-1 text-xs text-muted-foreground"><span>Tolerancia al riesgo</span><select className="w-full rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-foreground" value={goals.riskTolerance ?? "balanced"} onChange={e=>onChange({...goals,riskTolerance:e.target.value as BusinessGoals["riskTolerance"]})}><option value="conservative">Conservadora</option><option value="balanced">Balanceada</option><option value="growth">Crecimiento</option></select></label></div><p className="mt-3 text-xs text-muted-foreground">Los cambios se aplican a la vista actual. Confirma para guardarlos en Supabase y verlos en otros dispositivos. No se envían a Meta.</p><button type="button" onClick={()=>void onSave()} disabled={saving} className="mt-3 min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{saving?"Guardando…":"Guardar metas"}</button></Card>;
 }
-function Mini({icon:Icon,title,text}:{icon:typeof BrainCircuit;title:string;text:string}){return <Card className="p-4"><Icon className="size-4 text-accent-light"/><h3 className="mt-2 text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p></Card>}
-function Section({title,icon:Icon,items}:{title:string;icon:typeof BrainCircuit;items:string[]}){return <Card className="p-5"><div className="flex items-center gap-2"><Icon className="size-4 text-accent-light"/><h3 className="text-sm font-semibold">{title}</h3></div>{items.length?<div className="mt-3 space-y-2">{items.map((x,i)=><p key={i} className="rounded-lg bg-surface-2 px-3 py-2 text-xs leading-5 text-muted-foreground">{x}</p>)}</div>:<p className="mt-3 text-xs text-muted-foreground">Sin hallazgos con evidencia suficiente en este periodo.</p>}</Card>}
+function Stat({label,value}:{label:string;value:number}){return <Card className="p-4"><p className="text-2xl font-semibold text-foreground">{value}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{label}</p></Card>}
