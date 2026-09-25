@@ -69,9 +69,6 @@ export function DecisionCard({ decision }: { decision: PerformanceDecision }) {
             <div key={signal.code} className="rounded-lg border border-border-subtle bg-surface-2/60 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-medium text-foreground">{signal.label}</p>
-                <span className={`text-xs font-semibold ${signal.impact > 0 ? "text-positive" : signal.impact < 0 ? "text-negative" : "text-muted-foreground"}`}>
-                  {signal.impact > 0 ? "+" : ""}{signal.impact}
-                </span>
               </div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">{signal.detail}</p>
             </div>

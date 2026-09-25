@@ -11,9 +11,9 @@ import { useDecisions } from "@/hooks/use-decisions";
 
 export default function DecisionsPage() {
   const { loading, result, error } = useDecisions();
-  const summary = result?.summary;
   const campaigns = result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [];
   const details = result?.decisions.filter((decision) => decision.entityType !== "campaign") ?? [];
+  const count = (...actions: string[]) => campaigns.filter((decision) => actions.includes(decision.action)).length;
 
   return (
     <div className="space-y-5">
@@ -31,14 +31,14 @@ export default function DecisionsPage() {
         </div>
       </Card>
 
-      {summary && (
+      {result && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-          <Summary label="Escalar" value={summary.scale} />
-          <Summary label="Mantener" value={summary.maintain} />
-          <Summary label="Observar" value={summary.watch} />
-          <Summary label="Reducir" value={summary.reduce} />
-          <Summary label="Intervención" value={summary.pauseCandidate + summary.refreshCreative + summary.reviewAudience} />
-          <Summary label="Confianza alta" value={summary.highConfidence} />
+          <Summary label="Campañas para aumentar" value={count("SCALE")} />
+          <Summary label="Campañas para mantener" value={count("MAINTAIN")} />
+          <Summary label="Campañas para observar" value={count("WATCH", "INSUFFICIENT_DATA")} />
+          <Summary label="Campañas para reducir" value={count("REDUCE")} />
+          <Summary label="Campañas para revisar" value={count("PAUSE_CANDIDATE", "REFRESH_CREATIVE", "REVIEW_AUDIENCE")} />
+          <Summary label="Campañas con confianza alta" value={campaigns.filter((decision) => decision.confidence === "high").length} />
         </div>
       )}
 

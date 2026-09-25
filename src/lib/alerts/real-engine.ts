@@ -152,42 +152,6 @@ function applyCampaignRules(
   }
 }
 
-/** Regla sobre costo por resultado. Solo usa campañas cuya acción primaria fue devuelta por Meta. */
-function applyCostPerResultOutlierRule(
-  alerts: PerformanceAlert[],
-  campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics; resultsAvailable: boolean }[],
-  currency: string | null
-) {
-  const withResults = campaignMetrics.filter((c) => c.resultsAvailable && c.current.results > 0);
-  if (withResults.length <= 1) return;
-
-  const totals = withResults.reduce(
-    (acc, item) => {
-      acc.spend += item.current.spend;
-      acc.results += item.current.results;
-      return acc;
-    },
-    { spend: 0, results: 0 }
-  );
-  const accountCostPerResult = totals.results > 0 ? totals.spend / totals.results : 0;
-
-  for (const { campaignId, name, current } of withResults) {
-    if (accountCostPerResult > 0 && current.costPerResult >= accountCostPerResult * 1.6) {
-      const timesAvg = current.costPerResult / accountCostPerResult;
-      pushAlert(
-        alerts,
-        "warning",
-        "Costo por resultado muy por encima del promedio",
-        `"${name}" tiene un costo por resultado de ${formatCurrency(current.costPerResult, currency)}, ${timesAvg.toFixed(1)}x el promedio de la cuenta (${formatCurrency(accountCostPerResult, currency)}).`,
-        "campaign",
-        name,
-        "costPerResult",
-        campaignId
-      );
-    }
-  }
-}
-
 function sortBySeverity(alerts: PerformanceAlert[]): PerformanceAlert[] {
   const severityWeight: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
   return alerts.sort((a, b) => severityWeight[a.severity] - severityWeight[b.severity]);
@@ -206,18 +170,14 @@ export interface RealAlertEvaluationInput {
 /** Motor puro de alertas sobre datos ya obtenidos de Meta. */
 export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): PerformanceAlert[] {
   const alerts: PerformanceAlert[] = [];
-  const activeCampaigns = input.campaigns.filter((c) => c.status !== "ARCHIVED");
-  const campaignMetrics: { campaignId: string; name: string; current: PerformanceMetrics; resultsAvailable: boolean }[] = [];
+  const activeCampaigns = input.campaigns.filter((c) => c.status === "ACTIVE");
 
   for (const campaign of activeCampaigns) {
     const current = input.currentCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
     const previous = input.previousCampaignMetrics[campaign.id] ?? aggregateMetrics([]);
     const resultsAvailable = input.currentResultAvailability?.[campaign.id] ?? true;
-    campaignMetrics.push({ campaignId: campaign.id, name: campaign.name, current, resultsAvailable });
     applyCampaignRules(alerts, campaign, current, previous, input.currency, resultsAvailable);
   }
-
-  applyCostPerResultOutlierRule(alerts, campaignMetrics, input.currency);
 
   for (const adSet of input.adSets) {
     if (adSet.status !== "ACTIVE") continue;

@@ -107,8 +107,8 @@ function risk(action: DecisionAction, level: DecisionConfidence): DecisionRisk {
   if (action === "PAUSE_CANDIDATE") return "high";
   return ["SCALE", "REDUCE", "REFRESH_CREATIVE", "REVIEW_AUDIENCE"].includes(action) ? (level === "high" ? "medium" : "high") : "low";
 }
-function rationale(action: DecisionAction, level: DecisionConfidence, score: number, input: DecisionEntityInput, signals: DecisionSignal[]) {
-  const suffix = `Score ${score}/100 · confianza ${level === "high" ? "alta" : level === "medium" ? "media" : "baja"}.`;
+function rationale(action: DecisionAction, level: DecisionConfidence, input: DecisionEntityInput, signals: DecisionSignal[]) {
+  const suffix = `Confianza ${level === "high" ? "alta" : level === "medium" ? "media" : "baja"}.`;
   if (action === "INSUFFICIENT_DATA") return `Aún no hay información suficiente para una intervención fuerte. ${suffix}`;
   if (action === "PAUSE_CANDIDATE") return `Meta confirmó cero conversaciones y se cumplieron los tres candados de seguridad. ANLUX no pausa campañas automáticamente. ${suffix}`;
   if (action === "REFRESH_CREATIVE") return `La repetición del anuncio indica fatiga; conviene renovar el creativo. ${suffix}`;
@@ -136,5 +136,5 @@ export function evaluateDecision(input: DecisionEntityInput): PerformanceDecisio
   score = clampScore(score);
   const level = confidence(input.objective, input.current, input.previous);
   const action = deriveAction(input, score, level, signals);
-  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, resultType: input.resultType ?? null, previousResultType: input.previousResultType ?? null, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: rationale(action, level, score, input, signals), signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
+  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, resultType: input.resultType ?? null, previousResultType: input.previousResultType ?? null, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: rationale(action, level, input, signals), signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
 }
