@@ -3,12 +3,13 @@ import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealAds } from "@/lib/meta/real/ads";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
-import { fetchAccountAggregatedInsight, fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAccountAggregatedInsight, fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics, primaryResultType } from "@/lib/meta/real/insights";
 import { accountObservationMetrics } from "./account-metrics";
 import type { CampaignObjective, DateRange, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
 import { evaluateDecisionSafely } from "./safe-evaluate";
+import { recommendPortfolio } from "./portfolio";
 import type { DecisionEngineResult, DecisionEngineSummary, PerformanceDecision } from "./types";
 
 function emptyMetrics(): PerformanceMetrics {
@@ -124,6 +125,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         campaignId: campaign.id,
         campaignName: campaign.name,
         objective: campaign.objective,
+        resultType: primaryResultType(currentRow, campaign.objective),
+        previousResultType: primaryResultType(previousRow, campaign.objective),
         current,
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, campaign.objective)),
@@ -153,6 +156,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         campaignId: adSet.campaignId,
         campaignName: adSet.campaignName || campaign?.name || adSet.campaignId,
         objective,
+        resultType: primaryResultType(currentRow, objective),
+        previousResultType: primaryResultType(previousRow, objective),
         current,
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
@@ -182,6 +187,8 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         campaignId: ad.campaignId,
         campaignName: ad.campaignName || campaign?.name || ad.campaignId,
         objective,
+        resultType: primaryResultType(currentRow, objective),
+        previousResultType: primaryResultType(previousRow, objective),
         current,
         previous: previousMetrics,
         currentResultsAvailable: Boolean(currentRow && hasPrimaryResult(currentRow, objective)),
@@ -202,6 +209,7 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
     generatedAt: new Date().toISOString(),
     summary: summarize(sorted),
     decisions: sorted,
+    portfolioRecommendations: recommendPortfolio(sorted, currency),
     accountMetrics,
   };
 }

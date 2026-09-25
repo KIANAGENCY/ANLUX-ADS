@@ -1,4 +1,4 @@
-import type { DecisionConfidence, PerformanceDecision } from "@/lib/decisions/types";
+import type { DecisionConfidence, PerformanceDecision, PortfolioRecommendation } from "@/lib/decisions/types";
 
 export interface BusinessGoals {
   targetCostPerResult?: number | null;
@@ -30,7 +30,7 @@ export interface BudgetRecommendation {
 export interface CreativeInsight {
   adId: string;
   adName: string;
-  status: "winner" | "healthy" | "fatigue_risk" | "needs_refresh";
+  status: "winner" | "healthy" | "observe" | "fatigue_risk" | "needs_refresh";
   score: number;
   message: string;
 }
@@ -70,6 +70,7 @@ export interface IntelligenceSuiteResult {
   generatedAt: string;
   goals: BusinessGoals;
   decisions: PerformanceDecision[];
+  portfolioRecommendations?: PortfolioRecommendation[];
   anomalies: IntelligenceAnomaly[];
   budgetRecommendations: BudgetRecommendation[];
   creativeInsights: CreativeInsight[];

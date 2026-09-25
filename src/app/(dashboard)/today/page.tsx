@@ -6,6 +6,7 @@ import { CircleAlert, CircleCheck, CircleHelp, CircleStop, ChevronRight } from "
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PortfolioCard } from "@/components/decisions/portfolio-card";
 import { useIntelligence } from "@/hooks/use-intelligence";
 import { useFilters } from "@/components/providers/filters-provider";
 import type { DecisionAction, PerformanceDecision } from "@/lib/decisions/types";
@@ -13,7 +14,7 @@ import type { DecisionAction, PerformanceDecision } from "@/lib/decisions/types"
 const PRESENTATION: Record<DecisionAction, { label: string; className: string; Icon: typeof CircleCheck }> = {
   SCALE: { label: "VA BIEN", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300", Icon: CircleCheck },
   MAINTAIN: { label: "VA BIEN", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300", Icon: CircleCheck },
-  WATCH: { label: "NECESITA CAMBIO", className: "border-amber-500/30 bg-amber-500/10 text-amber-200", Icon: CircleAlert },
+  WATCH: { label: "OBSERVAR", className: "border-amber-500/30 bg-amber-500/10 text-amber-200", Icon: CircleAlert },
   REDUCE: { label: "NECESITA CAMBIO", className: "border-amber-500/30 bg-amber-500/10 text-amber-200", Icon: CircleAlert },
   REFRESH_CREATIVE: { label: "NECESITA CAMBIO", className: "border-amber-500/30 bg-amber-500/10 text-amber-200", Icon: CircleAlert },
   REVIEW_AUDIENCE: { label: "NECESITA CAMBIO", className: "border-amber-500/30 bg-amber-500/10 text-amber-200", Icon: CircleAlert },
@@ -22,6 +23,7 @@ const PRESENTATION: Record<DecisionAction, { label: string; className: string; I
 };
 
 function fallbackNarrative(decision: PerformanceDecision): string {
+  if (decision.rationale) return decision.rationale;
   if (decision.action === "PAUSE_CANDIDATE") return "Meta confirmó que aún no hay conversaciones y ya se cumplieron los candados de seguridad. Revisa esta campaña antes de seguir invirtiendo.";
   if (decision.action === "INSUFFICIENT_DATA") return "Aún no hay información suficiente para recomendar un cambio fuerte de forma responsable.";
   if (decision.action === "SCALE" || decision.action === "MAINTAIN") return "Los datos disponibles indican que esta campaña se mantiene saludable por ahora. Puedes observarla sin hacer cambios fuertes hoy.";
@@ -38,6 +40,8 @@ export default function TodayPage() {
   );
   const [quality, setQuality] = useState<Record<string, string>>({});
   const [savingCampaign, setSavingCampaign] = useState<string | null>(null);
+  const [savedCampaign, setSavedCampaign] = useState<string | null>(null);
+  const [qualityError, setQualityError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<{ targetCostPerResult: number } | null>(null);
   const [confirmingTarget, setConfirmingTarget] = useState(false);
 
@@ -66,8 +70,10 @@ export default function TodayPage() {
 
   async function saveQuality(campaignId: string) {
     const value = Number(quality[campaignId]);
-    if (!result || !Number.isFinite(value) || value < 0) return;
+    const reported = campaigns.find((campaign) => campaign.campaignId === campaignId)?.currentMetrics.results;
+    if (!result || !Number.isInteger(value) || value < 0 || reported == null || value > reported) return;
     setSavingCampaign(campaignId);
+    setQualityError(null);
     try {
       const response = await fetch("/api/meta/quality", {
         method: "POST",
@@ -75,6 +81,9 @@ export default function TodayPage() {
         body: JSON.stringify({ accountId: clientId, campaignId, periodTo: to, qualifiedConversations: value }),
       });
       if (!response.ok) throw new Error("No se pudo guardar.");
+      setSavedCampaign(campaignId);
+    } catch {
+      setQualityError("No se pudo guardar la calidad. Inténtalo de nuevo.");
     } finally {
       setSavingCampaign(null);
     }
@@ -89,6 +98,7 @@ export default function TodayPage() {
       </header>
 
       {error && <ErrorBanner message={error} />}
+      {qualityError && <ErrorBanner message={qualityError} />}
 
       {proposal && (
         <section className="rounded-2xl border border-accent/30 bg-accent/10 p-4">
@@ -98,6 +108,8 @@ export default function TodayPage() {
           </button>
         </section>
       )}
+
+      {result?.portfolioRecommendations?.map((recommendation) => <PortfolioCard key={recommendation.id} recommendation={recommendation} />)}
 
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-44 w-full rounded-2xl" />)}</div>
@@ -117,7 +129,7 @@ export default function TodayPage() {
                   </span>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-muted-foreground">{fallbackNarrative(decision)}</p>
-                {decision.currentResultsAvailable === true && (
+                {decision.currentResultsAvailable === true && decision.resultType === "onsite_conversion.messaging_conversation_started_7d" && (
                   <form
                     className="mt-4 rounded-xl border border-border-subtle bg-surface-2/50 p-3"
                     onSubmit={(event) => { event.preventDefault(); void saveQuality(decision.campaignId); }}
@@ -130,6 +142,7 @@ export default function TodayPage() {
                         id={`quality-${decision.campaignId}`}
                         type="number"
                         min="0"
+                        max={decision.currentMetrics.results}
                         step="1"
                         inputMode="numeric"
                         value={quality[decision.campaignId] ?? ""}
@@ -143,6 +156,7 @@ export default function TodayPage() {
                     </div>
                   </form>
                 )}
+                {savedCampaign === decision.campaignId && <p role="status" className="mt-2 text-xs text-positive">Calidad registrada para este periodo.</p>}
                 <Link href="/decisions" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-accent-light hover:bg-surface-2">
                   Ver detalle <ChevronRight className="size-4" aria-hidden />
                 </Link>

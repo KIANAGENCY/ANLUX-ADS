@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
 import { evaluateDecisionSafely } from "@/lib/decisions/safe-evaluate";
-import type { PerformanceDecision } from "@/lib/decisions/types";
+import { recommendPortfolio } from "@/lib/decisions/portfolio";
+import type { PerformanceDecision, PortfolioRecommendation } from "@/lib/decisions/types";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
-import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
+import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics, primaryResultType } from "@/lib/meta/real/insights";
+import { isActiveMetaAdAccount } from "@/lib/meta/account-binding";
 import { fetchAccountRangeMetrics } from "@/lib/meta/real/overview";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
 import { aiErrorResponse } from "@/lib/ai/error-response";
@@ -90,6 +92,7 @@ interface GatheredData {
   previousMetrics: PerformanceMetrics;
   alerts: PerformanceAlert[];
   decisions: PerformanceDecision[];
+  portfolioRecommendations: PortfolioRecommendation[];
 }
 
 const META_ACCOUNT_COLOR = "#1877F2";
@@ -129,6 +132,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       previousMetrics: aggregateMetrics([]),
       alerts: [],
       decisions: [],
+      portfolioRecommendations: [],
     };
   }
 
@@ -188,6 +192,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
       previousMetrics,
       alerts: [],
       decisions: [],
+      portfolioRecommendations: [],
     };
   }
 
@@ -263,6 +268,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         campaignId: campaign.id,
         campaignName: campaign.name,
         objective: campaign.objective,
+        resultType: primaryResultType(currentInsights.get(campaign.id), campaign.objective),
+        previousResultType: primaryResultType(previousInsights.get(campaign.id), campaign.objective),
         current: campaignMetrics[campaign.id],
         previous: previousCampaignMetrics[campaign.id],
         currentResultsAvailable: campaignResultAvailability[campaign.id],
@@ -285,6 +292,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         campaignId: adSet.campaignId,
         campaignName: adSet.campaignName,
         objective: adSet.campaignObjective,
+        resultType: primaryResultType(adSetInsights.get(adSet.id), adSet.campaignObjective),
+        previousResultType: primaryResultType(previousAdSetInsights.get(adSet.id), adSet.campaignObjective),
         current,
         previous: previousAdSetMetrics[adSet.id] ?? aggregateMetrics([]),
         currentResultsAvailable: adSetResultAvailability[adSet.id],
@@ -307,6 +316,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
         campaignId: ad.campaignId,
         campaignName: ad.campaignName,
         objective: ad.campaignObjective,
+        resultType: primaryResultType(adInsights.get(ad.id), ad.campaignObjective),
+        previousResultType: primaryResultType(previousAdInsights.get(ad.id), ad.campaignObjective),
         current,
         previous: previousAdMetrics[ad.id] ?? aggregateMetrics([]),
         currentResultsAvailable: adResultAvailability[ad.id],
@@ -336,6 +347,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     previousMetrics,
     alerts,
     decisions: sortDecisions(decisions),
+    portfolioRecommendations: recommendPortfolio(decisions, currency),
   };
 }
 
@@ -394,7 +406,7 @@ export async function POST(req: NextRequest) {
   }
 
   const accountId = clientId?.trim();
-  if (!accountId || !ACCOUNT_ID_RE.test(accountId)) {
+  if (!accountId || !ACCOUNT_ID_RE.test(accountId) || !isActiveMetaAdAccount(accountId)) {
     return NextResponse.json(
       { error: "Selecciona una cuenta de Meta válida para analizar su rendimiento." },
       { status: 400 }
@@ -435,6 +447,7 @@ export async function POST(req: NextRequest) {
       resultAvailability: data.resultAvailability,
       alerts: data.alerts,
       decisions: data.decisions,
+      portfolioRecommendations: data.portfolioRecommendations,
       question: question?.trim() || undefined,
     });
     return NextResponse.json(analysis);
@@ -442,4 +455,3 @@ export async function POST(req: NextRequest) {
     return aiErrorResponse(err);
   }
 }
-

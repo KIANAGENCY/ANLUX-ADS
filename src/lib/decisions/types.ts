@@ -28,6 +28,9 @@ export interface PerformanceDecision {
   campaignId: string;
   campaignName: string;
   objective: CampaignObjective;
+  /** Exact Meta action used as this period's primary result. */
+  resultType?: string | null;
+  previousResultType?: string | null;
   action: DecisionAction;
   score: number;
   confidence: DecisionConfidence;
@@ -43,6 +46,24 @@ export interface PerformanceDecision {
   /** Fecha de inicio informada por Meta, para proteger la fase de aprendizaje. */
   startDate?: string | null;
   generatedAt: string;
+}
+
+export interface PortfolioRecommendation {
+  id: string;
+  action: "COMPARE_QUALITY" | "TEST_REALLOCATION";
+  fromCampaignId: string;
+  fromCampaignName: string;
+  toCampaignId: string;
+  toCampaignName: string;
+  resultType: string;
+  currentFromCost: number;
+  currentToCost: number;
+  currentFromResults: number;
+  currentToResults: number;
+  relativeCostGapPercent: number;
+  explanation: string;
+  nextStep: string;
+  safeguard: string;
 }
 
 export interface DecisionEngineSummary {
@@ -66,6 +87,7 @@ export interface DecisionEngineResult {
   generatedAt: string;
   summary: DecisionEngineSummary;
   decisions: PerformanceDecision[];
+  portfolioRecommendations: PortfolioRecommendation[];
   /** Verified account-level totals from Meta; absent when Meta omits the account row. */
   accountMetrics?: Pick<PerformanceMetrics, "spend" | "impressions" | "reach" | "clicks" | "results">;
 }
@@ -77,6 +99,8 @@ export interface DecisionEntityInput {
   campaignId: string;
   campaignName: string;
   objective: CampaignObjective;
+  resultType?: string | null;
+  previousResultType?: string | null;
   current: PerformanceMetrics;
   previous: PerformanceMetrics;
   /** False means results is structural only and must never be read as a zero. */

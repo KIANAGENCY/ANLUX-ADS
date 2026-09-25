@@ -41,7 +41,7 @@ async function evaluate(req: NextRequest, save: boolean) {
       riskTolerance: req.nextUrl.searchParams.has("risk") ? requestGoals.riskTolerance : savedGoals?.riskTolerance ?? "balanced",
     };
     const decisionResult = await generateRealDecisions(accountId, { from, to }, { targetCostPerResult: goals.targetCostPerResult });
-    const suite = buildIntelligenceSuite(decisionResult.decisions, goals);
+    const suite = buildIntelligenceSuite(decisionResult.decisions, goals, decisionResult.portfolioRecommendations);
 
     let memory: MemoryStatus;
     try {
@@ -57,7 +57,7 @@ async function evaluate(req: NextRequest, save: boolean) {
       };
     }
 
-    return NextResponse.json({ ...suite, memory });
+    return NextResponse.json({ ...suite, portfolioRecommendations: decisionResult.portfolioRecommendations, memory });
   } catch (error) {
     return metaErrorResponse(error);
   }

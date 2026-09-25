@@ -65,6 +65,11 @@ function findPrimaryValue(items: ActionBreakdownItem[], objective: CampaignObjec
   return null;
 }
 
+/** Distinguishes purchases from messaging results under SALES/CONVERSIONS. */
+export function getPrimaryResultType(actions: ActionBreakdownItem[], objective: CampaignObjective): string | null {
+  return PRIMARY_ACTION_TYPES_BY_OBJECTIVE[objective].find((type) => actions.some((item) => item.actionType === type)) ?? null;
+}
+
 export function getPrimaryResult(actions: ActionBreakdownItem[], objective: CampaignObjective): number | null {
   return findPrimaryValue(actions, objective);
 }

@@ -107,7 +107,7 @@ function risk(action: DecisionAction, level: DecisionConfidence): DecisionRisk {
   if (action === "PAUSE_CANDIDATE") return "high";
   return ["SCALE", "REDUCE", "REFRESH_CREATIVE", "REVIEW_AUDIENCE"].includes(action) ? (level === "high" ? "medium" : "high") : "low";
 }
-function rationale(action: DecisionAction, level: DecisionConfidence, score: number) {
+function rationale(action: DecisionAction, level: DecisionConfidence, score: number, input: DecisionEntityInput, signals: DecisionSignal[]) {
   const suffix = `Score ${score}/100 · confianza ${level === "high" ? "alta" : level === "medium" ? "media" : "baja"}.`;
   if (action === "INSUFFICIENT_DATA") return `Aún no hay información suficiente para una intervención fuerte. ${suffix}`;
   if (action === "PAUSE_CANDIDATE") return `Meta confirmó cero conversaciones y se cumplieron los tres candados de seguridad. ANLUX no pausa campañas automáticamente. ${suffix}`;
@@ -116,7 +116,16 @@ function rationale(action: DecisionAction, level: DecisionConfidence, score: num
   if (action === "SCALE") return `El rendimiento permite probar un aumento gradual. ${suffix}`;
   if (action === "REDUCE") return `El deterioro justifica reducir exposición de forma gradual. ${suffix}`;
   if (action === "MAINTAIN") return `El rendimiento es saludable o estable. ${suffix}`;
-  return `Hay señales mixtas; conviene observar antes de cambiar. ${suffix}`;
+  if (action === "WATCH" && signals.length === 0 && input.currentResultsAvailable !== false && input.current.results > 0) {
+    const cost = input.current.costPerResult.toLocaleString("es-MX", { maximumFractionDigits: 2 });
+    const baseline = input.previousResultsAvailable !== false && input.previous.results >= 3 &&
+      (!input.resultType || input.resultType === input.previousResultType);
+    return baseline
+      ? `${input.current.results} resultados a ${cost} por resultado. La comparación anterior no muestra un cambio suficientemente fuerte para mover presupuesto por esta sola señal. ${suffix}`
+      : `${input.current.results} resultados a ${cost} por resultado. Falta una comparación anterior equivalente para justificar un cambio de presupuesto.${input.targetCostPerResult ? "" : " Configura un costo objetivo confirmado para evaluar eficiencia de negocio."} ${suffix}`;
+  }
+  if (action === "WATCH" && signals.length > 0) return `${signals[0].detail} Antes de cambiar presupuesto, confirma resultados y calidad. ${suffix}`;
+  return `No se detectó una mejora o caída suficiente para recomendar un cambio. ${suffix}`;
 }
 export function evaluateDecision(input: DecisionEntityInput): PerformanceDecision {
   const signals: DecisionSignal[] = [];
@@ -127,6 +136,5 @@ export function evaluateDecision(input: DecisionEntityInput): PerformanceDecisio
   score = clampScore(score);
   const level = confidence(input.objective, input.current, input.previous);
   const action = deriveAction(input, score, level, signals);
-  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: rationale(action, level, score), signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
+  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, resultType: input.resultType ?? null, previousResultType: input.previousResultType ?? null, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: rationale(action, level, score, input, signals), signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
 }
-

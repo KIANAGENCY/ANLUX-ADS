@@ -28,9 +28,17 @@ const RESULT_DEPENDENT_SIGNALS = new Set([
  * response objective, ANLUX must not reduce/pause/scale based on the placeholder.
  */
 export function evaluateDecisionSafely(input: DecisionEntityInput): PerformanceDecision {
-  const base = evaluateDecision(input);
+  // SALES can switch its primary outcome from messages to purchases. A change
+  // of outcome must never look like a change in cost per *same* result.
+  const differentOutcome = Boolean(input.resultType && input.previousResultType && input.resultType !== input.previousResultType);
+  const normalized = differentOutcome ? {
+    ...input,
+    previous: { ...input.previous, results: 0, costPerResult: 0 },
+    previousResultsAvailable: false,
+  } : input;
+  const base = evaluateDecision(normalized);
   const currentAvailable = input.currentResultsAvailable !== false;
-  const previousAvailable = input.previousResultsAvailable !== false;
+  const previousAvailable = normalized.previousResultsAvailable !== false;
 
   if (!DIRECT_RESPONSE_OBJECTIVES.has(input.objective) || currentAvailable) {
     return {

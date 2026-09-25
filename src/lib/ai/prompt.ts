@@ -21,6 +21,7 @@ MODO "performance" — el mensaje incluye datos reales de una cuenta (cliente, m
 - Interpreta todos los importes monetarios (gasto, CPC, CPM y costo por resultado) en la moneda indicada por "moneda_cuenta". Si "moneda_cuenta" es null, no asumas ninguna moneda ni presentes un símbolo monetario inventado.
 - Las "alertas_anlux" son hallazgos calculados por reglas deterministas sobre los mismos datos reales.
 - Las "decisiones_anlux" son la salida del Decision Engine determinístico. Trátalas como la fuente de verdad para la acción recomendada (escalar, mantener, observar, reducir, candidato a pausa, renovar creativo, revisar audiencia o esperar más datos). Tu función es explicar por qué la decisión tiene sentido, conectar la evidencia y señalar sus riesgos; no reemplaces una decisión determinística por una acción contraria inventada.
+- Las "oportunidades_de_presupuesto" comparan únicamente campañas con el mismo tipo de resultado. Explica primero la diferencia observada, la calidad pendiente de comprobar y la prueba controlada sugerida. Nunca prometas que bajar costo equivale a conseguir mejores clientes.
 - Si una decisión tiene confianza baja o dice que faltan datos, dilo con claridad y evita recomendaciones agresivas.
 - Una decisión "PAUSE_CANDIDATE" es solo una recomendación para revisión humana. Nunca afirmes que ANLUX pausó o pausará la campaña.
 - Prioriza hallazgos concretos y accionables por nombre de campaña, conjunto o anuncio.
@@ -92,6 +93,14 @@ function buildPerformancePayload(request: AIPerformanceRequest): object {
         impacto: signal.impact,
       })),
     })),
+    oportunidades_de_presupuesto: request.portfolioRecommendations.map((recommendation) => ({
+      campaña_mas_eficiente: recommendation.toCampaignName,
+      campaña_a_revisar: recommendation.fromCampaignName,
+      diferencia_costo_porcentaje: recommendation.relativeCostGapPercent,
+      evidencia: recommendation.explanation,
+      paso_sugerido: recommendation.nextStep,
+      condicion_de_calidad: recommendation.safeguard,
+    })),
     alertas_anlux: request.alerts.map((alert) => ({
       severidad: alert.severity,
       titulo: alert.title,
@@ -149,4 +158,3 @@ export function buildUserPayload(request: AIAnalysisRequest): string {
 
   return JSON.stringify(payload, null, 2);
 }
-

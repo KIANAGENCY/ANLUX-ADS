@@ -1,5 +1,5 @@
 import type { Ad, AdSet, AIAnalysis, Campaign, Client, DateRange, PerformanceAlert, PerformanceMetrics } from "@/lib/types";
-import type { PerformanceDecision } from "@/lib/decisions/types";
+import type { PerformanceDecision, PortfolioRecommendation } from "@/lib/decisions/types";
 
 export interface ResultAvailabilityByEntity {
   campaigns: Record<string, boolean>;
@@ -35,6 +35,7 @@ export interface AIPerformanceRequest {
   alerts: PerformanceAlert[];
   /** Decisiones del motor determinístico. El LLM las explica; no las sustituye ni ejecuta. */
   decisions: PerformanceDecision[];
+  portfolioRecommendations: PortfolioRecommendation[];
   /** Pregunta puntual del usuario en el chat, si la hay (modo libre vs "analiza todo"). */
   question?: string;
 }

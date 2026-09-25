@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deriveMessagingTarget } from "@/lib/intelligence/target-derivation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { isActiveMetaAdAccount } from "@/lib/meta/account-binding";
 
 const accountIdPattern = /^act_\d{1,30}$/;
 
 export async function GET(request: NextRequest) {
   const accountId = request.nextUrl.searchParams.get("accountId")?.trim() ?? "";
   if (!accountIdPattern.test(accountId)) return NextResponse.json({ error: "accountId inválido." }, { status: 400 });
+  if (!isActiveMetaAdAccount(accountId)) return NextResponse.json({ error: "Cuenta no autorizada." }, { status: 403 });
 
   const client = await getSupabaseServerClient();
   if (!client) return NextResponse.json({ error: "Supabase no está configurado." }, { status: 503 });

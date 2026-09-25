@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { BusinessGoals } from "@/lib/intelligence/types";
 import { loadBusinessGoals, saveBusinessGoals } from "@/lib/memory/repository";
+import { isActiveMetaAdAccount } from "@/lib/meta/account-binding";
 
 const ACCOUNT_ID_RE = /^act_\d{1,30}$/;
 const MAX_BODY_CHARS = 4096;
@@ -35,7 +36,7 @@ function parseGoals(value: unknown): BusinessGoals | null {
 
 export async function GET(req: NextRequest) {
   const accountId = req.nextUrl.searchParams.get("accountId")?.trim() ?? "";
-  if (!ACCOUNT_ID_RE.test(accountId)) {
+  if (!ACCOUNT_ID_RE.test(accountId) || !isActiveMetaAdAccount(accountId)) {
     return NextResponse.json({ error: "accountId inválido." }, { status: 400 });
   }
 
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
   const record = body as Record<string, unknown>;
   const accountId = typeof record.accountId === "string" ? record.accountId.trim() : "";
   const goals = parseGoals(record.goals);
-  if (!ACCOUNT_ID_RE.test(accountId) || !goals) {
+  if (!ACCOUNT_ID_RE.test(accountId) || !isActiveMetaAdAccount(accountId) || !goals) {
     return NextResponse.json({ error: "Cuenta o metas inválidas." }, { status: 400 });
   }
 

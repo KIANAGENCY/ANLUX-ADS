@@ -2,6 +2,7 @@
 
 import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { DecisionCard } from "@/components/decisions/decision-card";
+import { PortfolioCard } from "@/components/decisions/portfolio-card";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
@@ -56,6 +57,7 @@ export default function DecisionsPage() {
         />
       ) : (
         <div className="space-y-3">
+          {result.portfolioRecommendations.length > 0 && <section className="space-y-3"><h3 className="text-base font-semibold">Optimización del presupuesto entre campañas</h3>{result.portfolioRecommendations.map((recommendation) => <PortfolioCard key={recommendation.id} recommendation={recommendation}/>)}</section>}
           {result.decisions.map((decision) => (
             <DecisionCard key={decision.id} decision={decision} />
           ))}

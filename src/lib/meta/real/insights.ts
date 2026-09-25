@@ -1,7 +1,7 @@
 import "server-only";
 import type { CampaignObjective, DailyMetrics, EntityType } from "@/lib/types";
 import { metaGraphGet } from "./graph-client";
-import { getPrimaryResult, parseActionsArray, toNumber, type ActionBreakdownItem } from "./actions";
+import { getPrimaryResult, getPrimaryResultType, parseActionsArray, toNumber, type ActionBreakdownItem } from "./actions";
 
 const BASE_INSIGHTS_FIELDS = "spend,impressions,reach,frequency,clicks,cpc,cpm,ctr,actions,cost_per_action_type,action_values,purchase_roas";
 
@@ -116,6 +116,10 @@ export async function fetchAggregatedInsightsByEntity(
 
 export function hasPrimaryResult(row: RawInsightsRow, objective: CampaignObjective): boolean {
   return getPrimaryResult(parseActionsArray(row.actions), objective) !== null;
+}
+
+export function primaryResultType(row: RawInsightsRow | undefined, objective: CampaignObjective): string | null {
+  return row ? getPrimaryResultType(parseActionsArray(row.actions), objective) : null;
 }
 
 const PURCHASE_ACTION_TYPES = new Set(["offsite_conversion.fb_pixel_purchase", "omni_purchase", "purchase"]);
