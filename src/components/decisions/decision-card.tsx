@@ -55,10 +55,6 @@ export function DecisionCard({ decision }: { decision: PerformanceDecision }) {
 
         <div className="flex shrink-0 gap-2">
           <div className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-center">
-            <p className="text-lg font-semibold text-foreground">{decision.score}</p>
-            <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Score</p>
-          </div>
-          <div className="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-center">
             <p className="text-sm font-semibold text-foreground">{confidenceLabel(decision.confidence)}</p>
             <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Confianza</p>
           </div>

@@ -12,6 +12,8 @@ import { useDecisions } from "@/hooks/use-decisions";
 export default function DecisionsPage() {
   const { loading, result, error } = useDecisions();
   const summary = result?.summary;
+  const campaigns = result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [];
+  const details = result?.decisions.filter((decision) => decision.entityType !== "campaign") ?? [];
 
   return (
     <div className="space-y-5">
@@ -21,10 +23,9 @@ export default function DecisionsPage() {
             <BrainCircuit className="size-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">Decision Engine</h2>
+            <h2 className="text-base font-semibold text-foreground">Decisiones para tus campañas</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-              ANLUX evalúa campañas, conjuntos y anuncios con reglas determinísticas. Las acciones son recomendaciones read-only:
-              nunca modifican Meta automáticamente.
+              Primero verás qué decisión revisar para cada campaña y por qué. Los conjuntos y anuncios están disponibles abajo como detalle. ANLUX nunca cambia Meta automáticamente.
             </p>
           </div>
         </div>
@@ -58,9 +59,12 @@ export default function DecisionsPage() {
       ) : (
         <div className="space-y-3">
           {result.portfolioRecommendations.length > 0 && <section className="space-y-3"><h3 className="text-base font-semibold">Optimización del presupuesto entre campañas</h3>{result.portfolioRecommendations.map((recommendation) => <PortfolioCard key={recommendation.id} recommendation={recommendation}/>)}</section>}
-          {result.decisions.map((decision) => (
+          <h3 className="text-base font-semibold">Evaluación por campaña</h3>
+          {campaigns.map((decision) => (
             <DecisionCard key={decision.id} decision={decision} />
           ))}
+          {details.length > 0 && <details className="rounded-xl border border-border-subtle bg-surface p-5"><summary className="cursor-pointer text-sm font-semibold">Ver {details.length} evaluaciones de conjuntos y anuncios</summary><div className="mt-4 space-y-3">{details.map((decision) => <DecisionCard key={decision.id} decision={decision}/>)}</div></details>}
+          <p className="text-xs leading-5 text-muted-foreground">Costo por resultado significa cuánto invertiste, en promedio, por cada resultado del tipo reportado por Meta. Antes de cambiar presupuesto, confirma si esos resultados se convirtieron en clientes valiosos.</p>
         </div>
       )}
     </div>
