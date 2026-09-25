@@ -53,7 +53,11 @@ export async function persistServiceIntelligenceMemory(decisionResult: DecisionE
     const rows = decisionResult.decisions.map((decision) => ({
       ad_account_id: decisionResult.accountId, period_from: decisionResult.from, period_to: decisionResult.to,
       entity_type: decision.entityType, entity_id: decision.entityId, entity_name: decision.entityName,
-      campaign_id: decision.campaignId, objective: decision.objective, action: decision.action, score: decision.score,
+      campaign_id: decision.campaignId, objective: decision.objective,
+      result_type: decision.resultType ?? null, previous_result_type: decision.previousResultType ?? null,
+      current_results_available: decision.currentResultsAvailable === true,
+      previous_results_available: decision.previousResultsAvailable === true,
+      action: decision.action, score: decision.score,
       confidence: decision.confidence, risk: decision.risk, suggested_change_percent: decision.suggestedChangePercent,
       rationale: decision.rationale, evidence: decision.signals, metrics_current: decision.currentMetrics,
       metrics_previous: decision.previousMetrics, generated_at: decision.generatedAt, stored_at: capturedAt,

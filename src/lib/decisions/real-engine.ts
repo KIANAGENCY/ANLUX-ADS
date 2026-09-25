@@ -10,6 +10,7 @@ import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
 import { evaluateDecisionSafely } from "./safe-evaluate";
 import { recommendPortfolio } from "./portfolio";
+import { applyQualityEvidence, loadExactQuality } from "./quality";
 import type { DecisionEngineResult, DecisionEngineSummary, PerformanceDecision } from "./types";
 
 function emptyMetrics(): PerformanceMetrics {
@@ -84,7 +85,7 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
  * Genera recomendaciones determinísticas usando exclusivamente datos reales de Meta.
  * No existe ninguna llamada de escritura ni al Marketing API ni a un proveedor de IA.
  */
-export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null }): Promise<DecisionEngineResult> {
+export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null; service?: boolean }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
   const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow] =
@@ -200,7 +201,13 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
     );
   }
 
-  const sorted = sortDecisions(decisions);
+  let quality = new Map<string, number>();
+  try {
+    quality = await loadExactQuality(accountId, range.from, range.to, options?.service);
+  } catch (error) {
+    console.error("No se pudo consultar calidad verificada; se omite esta capa de evidencia.", error);
+  }
+  const sorted = sortDecisions(decisions.map((decision) => applyQualityEvidence(decision, quality.get(decision.campaignId))));
   return {
     accountId,
     currency,

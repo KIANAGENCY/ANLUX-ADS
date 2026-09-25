@@ -43,6 +43,7 @@ export interface PerformanceDecision {
   /** True only when Meta returned the objective-specific primary result action. */
   currentResultsAvailable?: boolean;
   previousResultsAvailable?: boolean;
+  qualifiedConversations?: number | null;
   /** Fecha de inicio informada por Meta, para proteger la fase de aprendizaje. */
   startDate?: string | null;
   generatedAt: string;

@@ -31,9 +31,9 @@ function fallbackNarrative(decision: PerformanceDecision): string {
 }
 
 export default function TodayPage() {
-  const { loading, result, error } = useIntelligence();
+  const { loading, result, error, refresh } = useIntelligence();
   const { clientId, dateRange } = useFilters();
-  const { to } = dateRange;
+  const { from, to } = dateRange;
   const campaigns = useMemo(
     () => result?.decisions.filter((decision) => decision.entityType === "campaign") ?? [],
     [result]
@@ -78,10 +78,11 @@ export default function TodayPage() {
       const response = await fetch("/api/meta/quality", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: clientId, campaignId, periodTo: to, qualifiedConversations: value }),
+        body: JSON.stringify({ accountId: clientId, campaignId, periodFrom: from, periodTo: to, qualifiedConversations: value }),
       });
       if (!response.ok) throw new Error("No se pudo guardar.");
       setSavedCampaign(campaignId);
+      await refresh();
     } catch {
       setQualityError("No se pudo guardar la calidad. Inténtalo de nuevo.");
     } finally {

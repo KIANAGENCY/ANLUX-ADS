@@ -42,6 +42,10 @@ jobs:
         run: node scripts/test-messaging.mjs
       - name: Meta data quality tests
         run: node scripts/test-meta-data-quality.mjs
+      - name: Portfolio decisions tests
+        run: node scripts/test-portfolio-decisions.mjs
+      - name: Quality and target tests
+        run: node scripts/test-quality-decisions.mjs
       - name: Lint
         run: npm run lint
       - name: Build
@@ -52,3 +56,5 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
           node scripts/test-security-smoke.mjs
+          CI_UNAUTHENTICATED=1 node scripts/test-ai-modes.mjs
+          CI_UNAUTHENTICATED=1 node scripts/test-meta-health.mjs
