@@ -1,6 +1,6 @@
 import "server-only";
 import type { Ad, CampaignObjective } from "@/lib/types";
-import { metaGraphGet } from "./graph-client";
+import { metaGraphGetAll } from "./paginated";
 import { mapEffectiveStatus, mapObjective } from "./mapping";
 
 interface RawAd {
@@ -14,10 +14,6 @@ interface RawAd {
   adset?: { name?: string };
 }
 
-interface AdsResponse {
-  data: RawAd[];
-}
-
 export interface RealAd extends Ad {
   campaignName: string;
   adSetName: string;
@@ -29,12 +25,12 @@ export interface RealAd extends Ad {
 const REAL_AD_PREVIEW_GRADIENT = "from-indigo-500 to-purple-600";
 
 export async function fetchRealAds(adAccountId: string): Promise<RealAd[]> {
-  const res = await metaGraphGet<AdsResponse>(`/${adAccountId}/ads`, {
+  const ads = await metaGraphGetAll<RawAd>(`/${adAccountId}/ads`, {
     fields: "id,name,adset_id,campaign_id,status,effective_status,campaign{name,objective},adset{name}",
     limit: 500,
   });
 
-  return (res.data ?? []).map((a) => ({
+  return ads.map((a) => ({
     id: a.id,
     adSetId: a.adset_id,
     campaignId: a.campaign_id,

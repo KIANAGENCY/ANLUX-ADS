@@ -1,5 +1,6 @@
 import type { CampaignObjective, PerformanceMetrics } from "@/lib/types";
 import type { DecisionAction, DecisionConfidence, DecisionEntityInput, DecisionRisk, DecisionSignal, PerformanceDecision } from "./types";
+const MESSAGING_CONVERSATION_ACTION = "onsite_conversion.messaging_conversation_started_7d";
 
 // Calibrables con datos reales tras el periodo inicial de uso.
 export const MIN_LEARNING_DAYS = 3;
@@ -49,19 +50,20 @@ function scoreCommon(signals: DecisionSignal[], current: PerformanceMetrics, pre
   }
   return score;
 }
-function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null, resultsAvailable?: boolean) {
+function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null, resultsAvailable?: boolean, resultType?: string | null) {
   let score = 0;
+  const resultLabel = resultType === MESSAGING_CONVERSATION_ACTION ? "conversación" : "resultado";
   const cpr = percentChange(current.costPerResult, previous.costPerResult);
   if (current.results >= 3 && previous.results >= 3 && cpr !== null) {
-    if (cpr <= -20) { score += 25; addSignal(signals, "cpr_down_strong", "Costo por conversación mejoró", `El costo bajó ${Math.abs(cpr).toFixed(1)}%.`, 25); }
-    else if (cpr >= 30) { score -= 25; addSignal(signals, "cpr_up_strong", "Costo por conversación empeoró", `El costo subió ${cpr.toFixed(1)}%.`, -25); }
-    else if (cpr >= 15) { score -= 12; addSignal(signals, "cpr_up", "Costo por conversación empeoró", `El costo subió ${cpr.toFixed(1)}%.`, -12); }
+    if (cpr <= -20) { score += 25; addSignal(signals, "cpr_down_strong", `Costo por ${resultLabel} mejoró`, `El costo bajó ${Math.abs(cpr).toFixed(1)}%.`, 25); }
+    else if (cpr >= 30) { score -= 25; addSignal(signals, "cpr_up_strong", `Costo por ${resultLabel} empeoró`, `El costo subió ${cpr.toFixed(1)}%.`, -25); }
+    else if (cpr >= 15) { score -= 12; addSignal(signals, "cpr_up", `Costo por ${resultLabel} empeoró`, `El costo subió ${cpr.toFixed(1)}%.`, -12); }
   }
   if (target != null && current.results > 0 && current.costPerResult > 0) {
-    if (current.costPerResult <= target) { score += 10; addSignal(signals, "target_met", "Objetivo confirmado cumplido", "El costo por conversación está dentro del objetivo confirmado.", 10); }
-    else if (current.costPerResult >= target * 1.5) { score -= 15; addSignal(signals, "target_missed", "Objetivo confirmado superado", "El costo por conversación excede de forma importante el objetivo confirmado.", -15); }
+    if (current.costPerResult <= target) { score += 10; addSignal(signals, "target_met", "Objetivo confirmado cumplido", `El costo por ${resultLabel} está dentro del objetivo confirmado.`, 10); }
+    else if (current.costPerResult >= target * 1.5) { score -= 15; addSignal(signals, "target_missed", "Objetivo confirmado superado", `El costo por ${resultLabel} excede de forma importante el objetivo confirmado.`, -15); }
   }
-  if (resultsAvailable === true && current.results === 0 && current.clicks >= 40) { score -= 20; addSignal(signals, "clicks_no_results", "Tráfico sin conversaciones", "Hay actividad, pero Meta reportó cero conversaciones solo cuando el dato está confirmado.", -20); }
+  if (resultsAvailable === true && current.results === 0 && current.clicks >= 40) { score -= 20; addSignal(signals, "clicks_no_results", `Tráfico sin ${resultLabel}s`, `Hay actividad, pero Meta reportó cero ${resultLabel}s con el dato confirmado.`, -20); }
   return score;
 }
 function scoreTraffic(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics) {
@@ -86,7 +88,7 @@ function deriveAction(input: DecisionEntityInput, score: number, level: Decision
   if (input.current.frequency > FATIGUE_FREQUENCY_THRESHOLD) return "REFRESH_CREATIVE";
   if (input.accountAverageCpc != null && input.accountAverageCpc > 0 && input.current.cpc >= input.accountAverageCpc * CPC_ACCOUNT_MULTIPLIER) return "REVIEW_AUDIENCE";
 
-  if (input.objective === "MESSAGES" && input.currentResultsAvailable === true && input.current.results === 0) {
+  if ((input.objective === "MESSAGES" || input.resultType === MESSAGING_CONVERSATION_ACTION) && input.currentResultsAvailable === true && input.current.results === 0) {
     const threshold = pauseThreshold(input);
     if (days === null || days < MIN_LEARNING_DAYS || threshold === null || input.current.spend < threshold) {
       const detail = threshold == null ? "Falta un costo típico u objetivo confirmado para juzgar esta campaña." : `Lleva al menos ${MIN_LEARNING_DAYS} días, pero se han invertido ${input.current.spend.toFixed(2)}; revisaremos al llegar a ${threshold.toFixed(2)}.`;
@@ -130,7 +132,7 @@ function rationale(action: DecisionAction, level: DecisionConfidence, input: Dec
 export function evaluateDecision(input: DecisionEntityInput): PerformanceDecision {
   const signals: DecisionSignal[] = [];
   let score = 50 + scoreCommon(signals, input.current, input.previous);
-  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult, input.currentResultsAvailable);
+  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult, input.currentResultsAvailable, input.resultType);
   else if (family(input.objective) === "traffic") score += scoreTraffic(signals, input.current, input.previous);
   if (input.current.frequency > FATIGUE_FREQUENCY_THRESHOLD) { score -= 15; addSignal(signals, "frequency_fatigue", "Exposición repetida", `La audiencia vio el anuncio ${input.current.frequency.toFixed(2)} veces en promedio.`, -15); }
   score = clampScore(score);

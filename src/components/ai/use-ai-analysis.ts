@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFilters } from "@/components/providers/filters-provider";
 import type { AIAnalysis } from "@/lib/types";
 
@@ -19,6 +19,8 @@ export interface ChatEntry {
   analysis?: AIAnalysis;
   /** Modo con el que se pidió este análisis, para poder etiquetarlo en la UI. */
   mode?: AnalysisMode;
+  accountId?: string | null;
+  dateRangeKey?: string;
 }
 
 /**
@@ -37,9 +39,13 @@ export function useAIAnalysis() {
   const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pending = useRef(false);
 
-  async function askQuestion(question: string, mode: AnalysisMode) {
-    if (!question.trim() || loading) return;
+  const askQuestion = useCallback(async (question: string, mode: AnalysisMode) => {
+    if (!question.trim() || pending.current) return;
+    pending.current = true;
+    const accountId = mode === "performance" ? clientId : null;
+    const dateRangeKey = mode === "performance" ? `${dateRange.from}:${dateRange.to}` : undefined;
 
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text: question }]);
     setLoading(true);
@@ -60,7 +66,7 @@ export function useAIAnalysis() {
         throw new Error(typeof data?.error === "string" ? data.error : "No se pudo generar el análisis.");
       }
       const analysis: AIAnalysis = data;
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", analysis, mode }]);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", analysis, mode, accountId, dateRangeKey }]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -79,10 +85,11 @@ export function useAIAnalysis() {
         },
       ]);
     } finally {
+      pending.current = false;
       setLoading(false);
       requestAnimationFrame(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }));
     }
-  }
+  }, [clientId, dateRange]);
 
   return { messages, loading, askQuestion, scrollRef };
 }

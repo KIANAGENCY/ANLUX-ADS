@@ -44,24 +44,30 @@ export async function GET(request: NextRequest) {
 
   const range = yesterdaysRange();
   const sections = [] as Array<{ name: string; headline: string; attention: string[]; healthy: string[] }>;
+  const persistenceFailures: string[] = [];
   for (const account of accounts) {
     const { goals } = await loadServiceBusinessGoals(account.id);
     const decisions = await generateRealDecisions(account.id, range, { targetCostPerResult: goals?.targetCostPerResult ?? null, service: true });
     const suite = buildIntelligenceSuite(decisions.decisions, goals ?? {}, decisions.portfolioRecommendations);
     try {
-      await persistServiceIntelligenceMemory(decisions, suite, goals ?? {});
+      const status = await persistServiceIntelligenceMemory(decisions, suite, goals ?? {});
+      if (status.state !== "ready") persistenceFailures.push(account.id);
     } catch (error) {
       console.error("No se pudo persistir memoria desde el informe diario.", error);
+      persistenceFailures.push(account.id);
     }
     sections.push({ name: account.name, headline: suite.brief.headline, attention: suite.brief.attention, healthy: suite.brief.healthy });
   }
 
   const { data, error } = await new Resend(resendKey).emails.send({
-    from: "ANLUX <onboarding@resend.dev>",
+    from: "ANLUX <brief@anluxagency.com>",
     to: recipient,
     subject: "Brief diario ANLUX",
     html: dailyEmail(sections),
   });
   if (error) return NextResponse.json({ error: "Resend no pudo enviar el informe." }, { status: 502 });
-  return NextResponse.json({ ok: true, id: data?.id ?? null, accounts: sections.length });
+  if (persistenceFailures.length) {
+    return NextResponse.json({ ok: false, warning: "Se envió el brief, pero no se guardaron todas las observaciones históricas.", id: data?.id ?? null, accounts: sections.length, persistenceFailures });
+  }
+  return NextResponse.json({ ok: true, id: data?.id ?? null, accounts: sections.length, period: range });
 }

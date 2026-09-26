@@ -1,6 +1,6 @@
 import "server-only";
 import type { Campaign } from "@/lib/types";
-import { metaGraphGet } from "./graph-client";
+import { metaGraphGetAll } from "./paginated";
 import { mapEffectiveStatus, mapObjective, minorUnitsToAmount } from "./mapping";
 
 interface RawCampaign {
@@ -14,10 +14,6 @@ interface RawCampaign {
   start_time?: string;
 }
 
-interface CampaignsResponse {
-  data: RawCampaign[];
-}
-
 function toDateOnly(value?: string): string | undefined {
   if (!value) return undefined;
   const match = value.match(/^\d{4}-\d{2}-\d{2}/);
@@ -25,12 +21,12 @@ function toDateOnly(value?: string): string | undefined {
 }
 
 export async function fetchRealCampaigns(adAccountId: string): Promise<Campaign[]> {
-  const res = await metaGraphGet<CampaignsResponse>(`/${adAccountId}/campaigns`, {
+  const campaigns = await metaGraphGetAll<RawCampaign>(`/${adAccountId}/campaigns`, {
     fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time",
     limit: 500,
   });
 
-  return (res.data ?? []).map((c) => ({
+  return campaigns.map((c) => ({
     id: c.id,
     adAccountId,
     name: c.name,
@@ -46,12 +42,12 @@ export async function fetchRealCampaigns(adAccountId: string): Promise<Campaign[
 
 /** Versión ligera usada internamente para asociar cada campaña a su objetivo (ver `overview.ts`). */
 export async function fetchCampaignObjectives(adAccountId: string): Promise<Map<string, ReturnType<typeof mapObjective>>> {
-  const res = await metaGraphGet<{ data: { id: string; objective?: string }[] }>(`/${adAccountId}/campaigns`, {
+  const campaigns = await metaGraphGetAll<{ id: string; objective?: string }>(`/${adAccountId}/campaigns`, {
     fields: "id,objective",
     limit: 500,
   });
   const map = new Map<string, ReturnType<typeof mapObjective>>();
-  for (const c of res.data ?? []) {
+  for (const c of campaigns) {
     map.set(c.id, mapObjective(c.objective));
   }
   return map;
