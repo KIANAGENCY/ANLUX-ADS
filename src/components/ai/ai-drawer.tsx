@@ -37,7 +37,7 @@ const AIAnalystContext = createContext<AIAnalystContextValue | null>(null);
  */
 export function AIDrawerProvider({ children }: { children: ReactNode }) {
   const { messages, loading, askQuestion, scrollRef } = useAIAnalysis();
-  const { clientId } = useFilters();
+  const { clientId, dateRange } = useFilters();
   const [isOpen, setIsOpen] = useState(false);
   // Si existe una cuenta real, AI Analyst debe priorizar datos de Meta. Mientras
   // las cuentas se cargan, el modo derivado cae a consulta estratégica.
@@ -48,10 +48,13 @@ export function AIDrawerProvider({ children }: { children: ReactNode }) {
 
   const lastAnalysis = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === "assistant" && messages[i].analysis) return messages[i].analysis!;
+      if (messages[i].role === "assistant" && messages[i].analysis &&
+        messages[i].mode === mode &&
+        (mode !== "performance" || (messages[i].accountId === clientId &&
+          messages[i].dateRangeKey === `${dateRange.from}:${dateRange.to}`))) return messages[i].analysis!;
     }
     return null;
-  }, [messages]);
+  }, [messages, mode, clientId, dateRange]);
 
   const value = useMemo<AIAnalystContextValue>(
     () => ({
@@ -66,9 +69,7 @@ export function AIDrawerProvider({ children }: { children: ReactNode }) {
       open: () => setIsOpen(true),
       close: () => setIsOpen(false),
     }),
-    // `askQuestion` se recrea en cada render del provider; el resto son los datos reales.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [messages, loading, mode, accountSelected, lastAnalysis, isOpen]
+    [messages, loading, askQuestion, mode, accountSelected, lastAnalysis, isOpen]
   );
 
   return (

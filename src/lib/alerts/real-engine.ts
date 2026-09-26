@@ -46,7 +46,7 @@ function applyCampaignRules(
   currency: string | null,
   resultsAvailable: boolean
 ) {
-  if (previous.ctr > 0 && current.ctr > 0) {
+  if (previous.impressions >= 1_000 && current.impressions >= 1_000 && previous.ctr > 0 && current.ctr > 0) {
     const ctrChange = ((current.ctr - previous.ctr) / previous.ctr) * 100;
     if (ctrChange <= -35) {
       pushAlert(
@@ -73,7 +73,7 @@ function applyCampaignRules(
     }
   }
 
-  if (previous.cpc > 0 && current.cpc > 0) {
+  if (previous.clicks >= 20 && current.clicks >= 20 && previous.cpc > 0 && current.cpc > 0) {
     const cpcChange = ((current.cpc - previous.cpc) / previous.cpc) * 100;
     if (cpcChange >= 50) {
       pushAlert(
@@ -119,7 +119,7 @@ function applyCampaignRules(
   const canEvaluateResults = campaign.objective !== "UNKNOWN" && resultsAvailable;
   if (
     canEvaluateResults &&
-    current.spend > 5 &&
+    current.spend >= 50 && current.clicks >= 30 &&
     current.results === 0 &&
     campaign.objective !== "BRAND_AWARENESS"
   ) {
@@ -135,7 +135,7 @@ function applyCampaignRules(
     );
   } else if (
     canEvaluateResults &&
-    current.spend > 5 &&
+    current.spend >= 50 && current.clicks >= 30 &&
     current.results === 0 &&
     campaign.objective === "BRAND_AWARENESS"
   ) {
@@ -183,7 +183,7 @@ export function buildRealAlertsFromMetrics(input: RealAlertEvaluationInput): Per
     if (adSet.status !== "ACTIVE") continue;
     const metrics = input.adSetMetrics[adSet.id];
     if (!metrics) continue;
-    if (metrics.frequency > 3) {
+    if (metrics.impressions >= 1_000 && metrics.reach >= 250 && metrics.frequency > 3) {
       pushAlert(
         alerts,
         metrics.frequency > 4.5 ? "critical" : "warning",

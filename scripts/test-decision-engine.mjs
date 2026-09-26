@@ -71,6 +71,18 @@ const pauseCandidate = evaluateDecision(
 );
 assert.equal(pauseCandidate.action, "PAUSE_CANDIDATE", "solo una campaña de mensajes con los tres candados cumplidos puede ser candidata a pausa");
 
+const conversionConversation = evaluateDecision(input({
+  objective: "CONVERSIONS",
+  resultType: "onsite_conversion.messaging_conversation_started_7d",
+  startDate: "2020-01-01T00:00:00.000Z",
+  targetCostPerResult: 20,
+  currentResultsAvailable: true,
+  current: metrics({ spend: 300, results: 0, clicks: 100, ctr: 1, cpc: 3, costPerResult: 0 }),
+  previous: metrics({ spend: 300, results: 30, clicks: 150, ctr: 2.5, cpc: 1, costPerResult: 10 }),
+}));
+assert.equal(conversionConversation.action, "PAUSE_CANDIDATE", "una conversión de mensajería usa los mismos candados de pausa");
+assert.equal(evaluateDecision(input({ ...conversionConversation, objective: "CONVERSIONS", targetCostPerResult: null, current: conversionConversation.currentMetrics, previous: conversionConversation.previousMetrics })).action, "INSUFFICIENT_DATA");
+
 const pauseLocked = evaluateDecision(
   input({
     objective: "MESSAGES",
@@ -116,4 +128,3 @@ assert.notEqual(unknown.action, "SCALE", "un objetivo UNKNOWN nunca debe generar
 assert.notEqual(unknown.action, "PAUSE_CANDIDATE", "un objetivo UNKNOWN nunca debe generar pausa agresiva");
 
 console.log("Decision Engine: guardarraíles de mensajes correctos.");
-

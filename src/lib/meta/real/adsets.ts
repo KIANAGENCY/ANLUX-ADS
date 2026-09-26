@@ -1,6 +1,6 @@
 import "server-only";
 import type { AdSet, CampaignObjective } from "@/lib/types";
-import { metaGraphGet } from "./graph-client";
+import { metaGraphGetAll } from "./paginated";
 import { mapEffectiveStatus, mapObjective, minorUnitsToAmount } from "./mapping";
 
 interface RawAdSet {
@@ -16,10 +16,6 @@ interface RawAdSet {
   promoted_object?: { whatsapp_phone_number?: string };
   start_time?: string;
   campaign?: { name?: string; objective?: string };
-}
-
-interface AdSetsResponse {
-  data: RawAdSet[];
 }
 
 export interface RealAdSet extends AdSet {
@@ -38,13 +34,13 @@ function toDateOnly(value?: string): string | undefined {
 }
 
 export async function fetchRealAdSets(adAccountId: string): Promise<RealAdSet[]> {
-  const res = await metaGraphGet<AdSetsResponse>(`/${adAccountId}/adsets`, {
+  const adSets = await metaGraphGetAll<RawAdSet>(`/${adAccountId}/adsets`, {
     fields:
       "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget,optimization_goal,destination_type,promoted_object,start_time,campaign{name,objective}",
     limit: 500,
   });
 
-  return (res.data ?? []).map((a) => ({
+  return adSets.map((a) => ({
     id: a.id,
     campaignId: a.campaign_id,
     name: a.name,

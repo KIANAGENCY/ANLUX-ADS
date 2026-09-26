@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
-import { evaluateDecisionSafely } from "@/lib/decisions/safe-evaluate";
-import { recommendPortfolio } from "@/lib/decisions/portfolio";
+import { generateRealDecisions } from "@/lib/decisions/real-engine";
 import type { PerformanceDecision, PortfolioRecommendation } from "@/lib/decisions/types";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
 import { fetchRealAds } from "@/lib/meta/real/ads";
-import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics, primaryResultType } from "@/lib/meta/real/insights";
+import { fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics } from "@/lib/meta/real/insights";
 import { isActiveMetaAdAccount } from "@/lib/meta/account-binding";
 import { fetchAccountRangeMetrics } from "@/lib/meta/real/overview";
 import { metaErrorResponse } from "@/lib/meta/real/error-response";
@@ -45,30 +44,6 @@ function validDateRange(range: DateRange | undefined): range is DateRange {
   const to = parseIsoDate(range.to);
   if (from === null || to === null || from > to) return false;
   return (to - from) / 86_400_000 + 1 <= MAX_RANGE_DAYS;
-}
-
-function hasActivity(metrics: PerformanceMetrics): boolean {
-  return metrics.spend > 0 || metrics.impressions > 0 || metrics.clicks > 0 || metrics.results > 0;
-}
-
-const DECISION_PRIORITY: Record<PerformanceDecision["action"], number> = {
-  PAUSE_CANDIDATE: 0,
-  REDUCE: 1,
-  REFRESH_CREATIVE: 2,
-  REVIEW_AUDIENCE: 3,
-  SCALE: 4,
-  WATCH: 5,
-  MAINTAIN: 6,
-  INSUFFICIENT_DATA: 7,
-};
-
-function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] {
-  const confidence = { high: 0, medium: 1, low: 2 } as const;
-  return decisions.sort((a, b) => {
-    const action = DECISION_PRIORITY[a.action] - DECISION_PRIORITY[b.action];
-    if (action !== 0) return action;
-    return confidence[a.confidence] - confidence[b.confidence];
-  });
 }
 
 interface AnalyzeRequestBody {
@@ -165,11 +140,6 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
   }
 
-  const campaignTotals = Object.values(campaignMetrics).reduce(
-    (totals, metrics) => ({ spend: totals.spend + metrics.spend, clicks: totals.clicks + metrics.clicks }),
-    { spend: 0, clicks: 0 }
-  );
-  const accountAverageCpc = campaignTotals.clicks > 0 ? campaignTotals.spend / campaignTotals.clicks : null;
   let targetCostPerResult: number | null = null;
   try {
     targetCostPerResult = (await loadBusinessGoals(accountId)).goals?.targetCostPerResult ?? null;
@@ -196,19 +166,15 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     };
   }
 
-  const [adSets, adSetInsights, previousAdSetInsights, ads, adInsights, previousAdInsights] = await Promise.all([
+  const [adSets, adSetInsights, ads, adInsights] = await Promise.all([
     fetchRealAdSets(accountId),
     fetchAggregatedInsightsByEntity(accountId, "adset", dateRange.from, dateRange.to),
-    fetchAggregatedInsightsByEntity(accountId, "adset", previousRange.from, previousRange.to),
     fetchRealAds(accountId),
     fetchAggregatedInsightsByEntity(accountId, "ad", dateRange.from, dateRange.to),
-    fetchAggregatedInsightsByEntity(accountId, "ad", previousRange.from, previousRange.to),
   ]);
 
   const adSetMetrics: Record<string, PerformanceMetrics> = {};
-  const previousAdSetMetrics: Record<string, PerformanceMetrics> = {};
   const adSetResultAvailability: Record<string, boolean> = {};
-  const previousAdSetResultAvailability: Record<string, boolean> = {};
   for (const adSet of adSets) {
     const row = adSetInsights.get(adSet.id);
     adSetMetrics[adSet.id] = aggregateMetrics(
@@ -216,21 +182,11 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
     adSetResultAvailability[adSet.id] = Boolean(row && hasPrimaryResult(row, adSet.campaignObjective));
 
-    const previousRow = previousAdSetInsights.get(adSet.id);
-    previousAdSetMetrics[adSet.id] = aggregateMetrics(
-      previousRow
-        ? [mapInsightsRowToDailyMetrics(previousRow, adSet.id, "adset", adSet.campaignObjective, previousRange.from)]
-        : []
-    );
-    previousAdSetResultAvailability[adSet.id] = Boolean(
-      previousRow && hasPrimaryResult(previousRow, adSet.campaignObjective)
-    );
+
   }
 
   const adMetrics: Record<string, PerformanceMetrics> = {};
-  const previousAdMetrics: Record<string, PerformanceMetrics> = {};
   const adResultAvailability: Record<string, boolean> = {};
-  const previousAdResultAvailability: Record<string, boolean> = {};
   for (const ad of ads) {
     const row = adInsights.get(ad.id);
     adMetrics[ad.id] = aggregateMetrics(
@@ -238,13 +194,7 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     );
     adResultAvailability[ad.id] = Boolean(row && hasPrimaryResult(row, ad.campaignObjective));
 
-    const previousRow = previousAdInsights.get(ad.id);
-    previousAdMetrics[ad.id] = aggregateMetrics(
-      previousRow
-        ? [mapInsightsRowToDailyMetrics(previousRow, ad.id, "ad", ad.campaignObjective, previousRange.from)]
-        : []
-    );
-    previousAdResultAvailability[ad.id] = Boolean(previousRow && hasPrimaryResult(previousRow, ad.campaignObjective));
+
   }
 
   const alerts = buildRealAlertsFromMetrics({
@@ -257,77 +207,9 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     currency,
   });
 
-  const decisions: PerformanceDecision[] = [];
-  for (const campaign of campaigns) {
-    if (campaign.status !== "ACTIVE" || !hasActivity(campaignMetrics[campaign.id] ?? aggregateMetrics([]))) continue;
-    decisions.push(
-      evaluateDecisionSafely({
-        entityType: "campaign",
-        entityId: campaign.id,
-        entityName: campaign.name,
-        campaignId: campaign.id,
-        campaignName: campaign.name,
-        objective: campaign.objective,
-        resultType: primaryResultType(currentInsights.get(campaign.id), campaign.objective),
-        previousResultType: primaryResultType(previousInsights.get(campaign.id), campaign.objective),
-        current: campaignMetrics[campaign.id],
-        previous: previousCampaignMetrics[campaign.id],
-        currentResultsAvailable: campaignResultAvailability[campaign.id],
-        previousResultsAvailable: previousCampaignResultAvailability[campaign.id],
-        startDate: campaign.startDate ?? null,
-        targetCostPerResult,
-        accountAverageCpc,
-      })
-    );
-  }
-
-  for (const adSet of adSets) {
-    const current = adSetMetrics[adSet.id];
-    if (adSet.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
-    decisions.push(
-      evaluateDecisionSafely({
-        entityType: "adset",
-        entityId: adSet.id,
-        entityName: adSet.name,
-        campaignId: adSet.campaignId,
-        campaignName: adSet.campaignName,
-        objective: adSet.campaignObjective,
-        resultType: primaryResultType(adSetInsights.get(adSet.id), adSet.campaignObjective),
-        previousResultType: primaryResultType(previousAdSetInsights.get(adSet.id), adSet.campaignObjective),
-        current,
-        previous: previousAdSetMetrics[adSet.id] ?? aggregateMetrics([]),
-        currentResultsAvailable: adSetResultAvailability[adSet.id],
-        previousResultsAvailable: previousAdSetResultAvailability[adSet.id],
-        startDate: adSet.startDate ?? campaigns.find((campaign) => campaign.id === adSet.campaignId)?.startDate ?? null,
-        targetCostPerResult,
-        accountAverageCpc,
-      })
-    );
-  }
-
-  for (const ad of ads) {
-    const current = adMetrics[ad.id];
-    if (ad.status !== "ACTIVE" || !current || !hasActivity(current)) continue;
-    decisions.push(
-      evaluateDecisionSafely({
-        entityType: "ad",
-        entityId: ad.id,
-        entityName: ad.name,
-        campaignId: ad.campaignId,
-        campaignName: ad.campaignName,
-        objective: ad.campaignObjective,
-        resultType: primaryResultType(adInsights.get(ad.id), ad.campaignObjective),
-        previousResultType: primaryResultType(previousAdInsights.get(ad.id), ad.campaignObjective),
-        current,
-        previous: previousAdMetrics[ad.id] ?? aggregateMetrics([]),
-        currentResultsAvailable: adResultAvailability[ad.id],
-        previousResultsAvailable: previousAdResultAvailability[ad.id],
-        startDate: campaigns.find((campaign) => campaign.id === ad.campaignId)?.startDate ?? null,
-        targetCostPerResult,
-        accountAverageCpc,
-      })
-    );
-  }
+  // El mismo motor que alimenta la página de decisiones aplica la evidencia humana
+  // del periodo exacto y las salvaguardas de reasignación de cartera.
+  const official = await generateRealDecisions(accountId, dateRange, { targetCostPerResult });
 
   return {
     client,
@@ -346,8 +228,8 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     currentMetrics,
     previousMetrics,
     alerts,
-    decisions: sortDecisions(decisions),
-    portfolioRecommendations: recommendPortfolio(decisions, currency),
+    decisions: official.decisions,
+    portfolioRecommendations: official.portfolioRecommendations,
   };
 }
 
