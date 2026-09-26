@@ -2,6 +2,7 @@ import "server-only";
 import { MetaApiError, metaGraphGet } from "./graph-client";
 import { metaConfig } from "../config";
 import type { MetaAdAccountSummary } from "@/lib/types";
+import { ACTIVE_META_CLIENT } from "@/lib/meta/account-binding";
 
 /**
  * Estados posibles de la conexión con Meta. Se distinguen entre sí porque
@@ -43,7 +44,7 @@ export interface MetaHealthReport {
   /** Resumen accionable en una frase. */
   summary: string;
   checks: MetaHealthCheck[];
-  /** Cuentas accesibles con el token actual. Vacío si no se pudieron leer. */
+  /** Única cuenta vinculada a ANLUX, si es accesible. */
   accounts: MetaAdAccountSummary[];
   /** ¿Hay un Business Manager configurado? Si no, esa comprobación se omite. */
   businessConfigured: boolean;
@@ -127,7 +128,7 @@ export async function checkMetaHealth(): Promise<MetaHealthReport> {
       fields: "id,name,account_status,currency",
       limit: 200,
     });
-    accounts = (res.data ?? []).map((a) => ({
+    accounts = (res.data ?? []).filter((a) => a.id === ACTIVE_META_CLIENT.adAccountId).map((a) => ({
       id: a.id,
       name: a.name?.trim() || a.id,
       accountStatus: a.account_status ?? 0,
@@ -137,7 +138,7 @@ export async function checkMetaHealth(): Promise<MetaHealthReport> {
       id: "token",
       label: "Token de acceso",
       ok: true,
-      detail: `Meta aceptó el token. Cuentas propias visibles: ${accounts.length}.`,
+      detail: accounts.length ? "Meta aceptó el token y la cuenta vinculada es visible." : "Meta aceptó el token, pero la cuenta vinculada no está visible.",
     });
   } catch (err) {
     const status = statusFromError(err);
