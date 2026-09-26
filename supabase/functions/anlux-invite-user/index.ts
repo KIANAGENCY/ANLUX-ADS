@@ -1,8 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.112.4";
 
-const site = "https://anlux-ads.vercel.app";
-const headers = {
-  "Access-Control-Allow-Origin": site,
+const site = "https://ads.anluxagency.com";
+const allowedOrigins = new Set([site, "https://anlux-ads.vercel.app"]);
+const baseHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
@@ -10,12 +10,17 @@ const headers = {
 };
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("origin");
+  const headers = {
+    ...baseHeaders,
+    ...(origin && allowedOrigins.has(origin) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
+  };
   const reply = (body: object, status = 200) =>
     new Response(JSON.stringify(body), { status, headers });
 
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  if (req.method === "OPTIONS") return new Response(null, { status: allowedOrigins.has(origin ?? "") ? 204 : 403, headers });
   if (req.method !== "POST") return reply({ error: "Método no permitido." }, 405);
-  if (req.headers.get("origin") && req.headers.get("origin") !== site) {
+  if (origin && !allowedOrigins.has(origin)) {
     return reply({ error: "Origen no permitido." }, 403);
   }
 

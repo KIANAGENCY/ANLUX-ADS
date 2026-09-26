@@ -1,11 +1,10 @@
 "use client";
 
 import { DollarSign, Eye, MonitorPlay, Gauge, MousePointerClick, Percent, Coins, Target, Repeat, Users } from "lucide-react";
-import { useAccountMetrics } from "@/hooks/use-account-metrics";
 import { useFilters } from "@/components/providers/filters-provider";
 import { MetricCard } from "./metric-card";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import type { MetricKey } from "@/lib/types";
+import type { MetricComparison, MetricKey } from "@/lib/types";
 
 /**
  * Orden por relevancia de negocio: primero lo que se decide (inversión,
@@ -24,8 +23,7 @@ const METRIC_ORDER: { key: MetricKey; icon: typeof DollarSign }[] = [
   { key: "frequency", icon: Repeat },
 ];
 
-export function MetricsGrid() {
-  const { loading, comparison } = useAccountMetrics();
+export function MetricsGrid({ loading, comparison }: { loading: boolean; comparison: MetricComparison | null }) {
   const { currency } = useFilters();
 
   if (loading || !comparison) {

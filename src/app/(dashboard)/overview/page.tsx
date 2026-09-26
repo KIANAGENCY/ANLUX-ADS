@@ -27,7 +27,7 @@ export default function OverviewPage() {
 
       <AnluxIntelligence />
 
-      <MetricsGrid />
+      <MetricsGrid loading={loading} comparison={comparison} />
 
       <PerformanceChart rows={dailyRows} loading={loading} />
 
