@@ -1,6 +1,6 @@
 "use client";
 
-import { Image as ImageIcon, Video, GalleryHorizontal, Trophy } from "lucide-react";
+import { Image as ImageIcon, Video, GalleryHorizontal, Trophy, Megaphone } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useFilters } from "@/components/providers/filters-provider";
@@ -11,6 +11,7 @@ const CREATIVE_ICON = {
   IMAGE: ImageIcon,
   VIDEO: Video,
   CAROUSEL: GalleryHorizontal,
+  UNKNOWN: Megaphone,
 };
 
 export function WinnerCard({ winner }: { winner: CreativeWinner }) {

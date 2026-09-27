@@ -76,6 +76,9 @@ const cron = load("src/app/api/cron/daily-brief/route.ts", {
   "@/lib/intelligence/engine": { buildIntelligenceSuite: () => ({}) },
   "@/lib/memory/service-repository": { loadServiceBusinessGoals: async () => ({}), persistServiceIntelligenceMemory: async () => ({}) },
   "@/lib/meta/real/accounts": { fetchAdAccounts: async () => [] },
+  "@/lib/supabase/service": { getSupabaseServiceClient: () => ({}) },
+  "@/lib/memory/config": { isMemoryEnabled: () => true },
+  "@/lib/memory/cron-status": { startCronRun: async () => "pending", updateCronRun: async () => {} },
 });
 const oldSecret = process.env.CRON_SECRET;
 const oldRecipient = process.env.ANLUX_BRIEF_RECIPIENT;
