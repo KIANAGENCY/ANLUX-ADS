@@ -38,6 +38,8 @@ jobs:
         run: node scripts/test-audit-regressions.mjs
       - name: Memory refresh regression
         run: node scripts/test-memory-refresh.mjs
+      - name: Daily cron persistence regression
+        run: node scripts/test-cron-decoupling.mjs
       - name: Messaging attribution tests
         run: node scripts/test-messaging.mjs
       - name: Meta data quality tests

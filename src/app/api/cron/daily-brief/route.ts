@@ -73,9 +73,10 @@ export async function GET(request: NextRequest) {
     persistenceFailures.push("daily_snapshot");
   }
 
+  const snapshotOk = persistenceFailures.length === 0;
   let emailStatus: "sent" | "skipped" | "failed" = priorEmailStatus === "sent" ? "sent" : "skipped";
   let emailId: string | undefined;
-  if (priorEmailStatus !== "sent" && recipient && resendKey && sections.length > 0) {
+  if (snapshotOk && priorEmailStatus !== "sent" && recipient && resendKey && sections.length > 0) {
     try {
       const { data, error } = await new Resend(resendKey).emails.send({
         from: "ANLUX <brief@anluxagency.com>",
@@ -92,7 +93,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const snapshotOk = persistenceFailures.length === 0;
   try {
     await updateCronRun(service, range.from, {
       finished_at: new Date().toISOString(),
