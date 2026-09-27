@@ -10,6 +10,7 @@ export interface MessagingAction {
 export interface MessagingDetail {
   source: string;
   destination: string;
+  destinationBasis?: "reported" | "configured" | "unknown";
   conversations: number | null;
 }
 
@@ -39,11 +40,27 @@ export function conversationCount(actions?: MessagingAction[]): number | null {
 }
 
 export function destinationLabel(value?: string): string {
-  const key = value?.toLowerCase();
+  const key = value?.trim().toLowerCase();
   if (key === "whatsapp") return "WhatsApp";
   if (key === "messenger") return "Messenger";
   if (key === "instagram_direct" || key === "instagram") return "Instagram Direct";
   return "Destino no identificado";
+}
+
+/** Current delivery configuration is context, not historical result attribution. */
+export function configuredDestinationLabel(type?: string, whatsapp = false): string | undefined {
+  const key = type?.trim().toUpperCase();
+  const multiple: Record<string, string> = {
+    MESSAGING_INSTAGRAM_DIRECT_MESSENGER: "Instagram Direct / Messenger",
+    MESSAGING_INSTAGRAM_DIRECT_MESSENGER_WHATSAPP: "Instagram Direct / Messenger / WhatsApp",
+    MESSAGING_INSTAGRAM_DIRECT_WHATSAPP: "Instagram Direct / WhatsApp",
+    MESSAGING_MESSENGER_WHATSAPP: "Messenger / WhatsApp",
+  };
+  if (key && multiple[key]) return multiple[key];
+  const label = destinationLabel(type);
+  if (label !== "Destino no identificado") return label;
+  if (!key && whatsapp) return "WhatsApp";
+  return undefined;
 }
 
 export function sourceLabel(value?: string): string {
@@ -53,26 +70,11 @@ export function sourceLabel(value?: string): string {
 
 export interface MessagingInsight {
   campaign_id?: string;
+  adset_id?: string;
+  configuredDestination?: string;
   campaign_name?: string;
   publisher_platform?: string;
   actions?: MessagingAction[];
-}
-
-/** Reemplaza un destino desconocido solo con metadata verificada del ad set/campaña. */
-export function applyInferredDestinations(
-  campaigns: CampaignMessaging[],
-  destinationByCampaign: Map<string, string>
-): CampaignMessaging[] {
-  return campaigns.map((campaign) => {
-    const inferred = destinationByCampaign.get(campaign.campaignId);
-    if (!inferred) return campaign;
-    return {
-      ...campaign,
-      details: campaign.details.map((detail) =>
-        detail.destination === "Destino no identificado" ? { ...detail, destination: inferred } : detail
-      ),
-    };
-  });
 }
 
 /** Only exact conversation events are grouped; totals never get added to their breakdown. */
@@ -96,15 +98,19 @@ export function buildMessagingReport(
     const groups = new Map<string, MessagingAction[]>();
     for (const action of row.actions ?? []) {
       if (action.action_type !== CONVERSATION_ACTION) continue;
-      const destination = destinationLabel(action.action_destination);
-      groups.set(destination, [...(groups.get(destination) ?? []), action]);
+      const reported = destinationLabel(action.action_destination);
+      const destination = reported === "Destino no identificado" ? row.configuredDestination ?? reported : reported;
+      const basis = reported !== "Destino no identificado" ? "reported" : row.configuredDestination ? "configured" : "unknown";
+      const groupKey = JSON.stringify([destination, basis]);
+      groups.set(groupKey, [...(groups.get(groupKey) ?? []), action]);
     }
-    for (const [destination, actions] of groups) {
+    for (const [groupKey, actions] of groups) {
+      const [destination, destinationBasis] = JSON.parse(groupKey) as [string, MessagingDetail["destinationBasis"]];
       const source = sourceLabel(row.publisher_platform);
       const count = conversationCount(actions);
-      const existing = campaign.details.find(d => d.source === source && d.destination === destination);
+      const existing = campaign.details.find(d => d.source === source && d.destination === destination && d.destinationBasis === destinationBasis);
       if (existing) existing.conversations = existing.conversations === null || count === null ? null : existing.conversations + count;
-      else campaign.details.push({ source, destination, conversations: count });
+      else campaign.details.push({ source, destination, destinationBasis, conversations: count });
     }
   }
   return [...campaigns.values()];
