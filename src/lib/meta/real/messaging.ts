@@ -2,9 +2,8 @@ import "server-only";
 import { MetaApiError, metaGraphGet } from "./graph-client";
 import { fetchRealAdSets } from "./adsets";
 import {
-  applyInferredDestinations,
   buildMessagingReport,
-  destinationLabel,
+  configuredDestinationLabel,
   type MessagingInsight,
   type MessagingReport,
 } from "../messaging";
@@ -28,28 +27,6 @@ async function allInsights(accountId: string, params: Record<string, string | nu
   throw new MetaApiError("empty_response", "El informe de conversaciones es demasiado grande. Reduce el rango de fechas.");
 }
 
-function inferDestinationByCampaign(adSets: Awaited<ReturnType<typeof fetchRealAdSets>>): Map<string, string> {
-  const candidates = new Map<string, Set<string>>();
-  for (const adSet of adSets) {
-    let destination: string | null = null;
-    if (adSet.whatsappDestination) destination = "WhatsApp";
-    else if (adSet.destinationType) {
-      const label = destinationLabel(adSet.destinationType);
-      if (label !== "Destino no identificado") destination = label;
-    }
-    if (!destination) continue;
-    const set = candidates.get(adSet.campaignId) ?? new Set<string>();
-    set.add(destination);
-    candidates.set(adSet.campaignId, set);
-  }
-
-  const result = new Map<string, string>();
-  for (const [campaignId, destinations] of candidates) {
-    if (destinations.size === 1) result.set(campaignId, [...destinations][0]);
-  }
-  return result;
-}
-
 export async function fetchMessagingReport(accountId: string, from: string, to: string): Promise<MessagingReport> {
   const params = {
     level: "campaign", fields: "campaign_id,campaign_name,actions",
@@ -57,23 +34,31 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
     use_unified_attribution_setting: "true",
   };
   // A breakdown failure must not erase the independent campaign totals.
-  const [totals, adSets] = await Promise.all([allInsights(accountId, params), fetchRealAdSets(accountId)]);
+  const totals = await allInsights(accountId, params);
   let breakdown: MessagingInsight[] = [];
   const warnings: string[] = [];
+  let adSets: Awaited<ReturnType<typeof fetchRealAdSets>> = [];
+  try { adSets = await fetchRealAdSets(accountId); }
+  catch { warnings.push("No se pudo consultar la configuración de los destinos. Se conservan los resultados de Meta."); }
+  const detailParams = { ...params, level: "adset", fields: "campaign_id,campaign_name,adset_id,actions" };
   try {
     breakdown = await allInsights(accountId, {
-      ...params, breakdowns: "publisher_platform", action_breakdowns: "action_type,action_destination",
+      ...detailParams, breakdowns: "publisher_platform", action_breakdowns: "action_type,action_destination",
     });
   } catch {
     warnings.push("Meta no permitió el desglose conjunto por origen y destino. Se muestran los totales por campaña.");
     try {
-      breakdown = await allInsights(accountId, { ...params, action_breakdowns: "action_type,action_destination" });
+      breakdown = await allInsights(accountId, { ...detailParams, action_breakdowns: "action_type,action_destination" });
     } catch {
       warnings.push("El destino tampoco está disponible para este periodo.");
     }
   }
 
-  const inferredDestinations = inferDestinationByCampaign(adSets);
-  const campaigns = applyInferredDestinations(buildMessagingReport(totals, breakdown), inferredDestinations);
+  const byId = new Map(adSets.map(adSet => [adSet.id, adSet]));
+  const campaigns = buildMessagingReport(totals, breakdown.map(row => {
+    const adSet = row.adset_id ? byId.get(row.adset_id) : undefined;
+    return { ...row, configuredDestination: adSet && adSet.campaignId === row.campaign_id
+      ? configuredDestinationLabel(adSet.destinationType, adSet.whatsappDestination) : undefined };
+  }));
   return { campaigns, warnings };
 }
