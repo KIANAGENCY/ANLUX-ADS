@@ -6,17 +6,18 @@ import ts from "typescript";
 const source = ts.transpileModule(readFileSync("src/app/api/cron/daily-brief/route.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const state = { persisted: 0, updates: [], sent: 0 };
+const state = { persisted: 0, updates: [], sent: 0, persistenceFails: false };
+const env = { CRON_SECRET: "test-secret" };
 const loadedModule = { exports: {} };
 const imports = {
   "server-only": {},
   "next/server": { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
-  resend: { Resend: class { constructor() { state.sent++; } } },
+  resend: { Resend: class { emails = { send: async () => { state.sent++; return { data: { id: "test-email" }, error: null }; } }; } },
   "@/lib/decisions/real-engine": { generateRealDecisions: async () => ({ decisions: [], portfolioRecommendations: [], accountMetrics: { spend: 1 } }) },
   "@/lib/intelligence/engine": { buildIntelligenceSuite: () => ({ brief: { headline: "Informe", attention: [], healthy: [] } }) },
   "@/lib/memory/service-repository": {
     loadServiceBusinessGoals: async () => ({ goals: null }),
-    persistServiceIntelligenceMemory: async () => { state.persisted++; return { state: "ready" }; },
+    persistServiceIntelligenceMemory: async () => { state.persisted++; return { state: state.persistenceFails ? "unavailable" : "ready" }; },
   },
   "@/lib/meta/real/accounts": { fetchAdAccounts: async () => [{ id: "act_1", name: "Hotel Expert" }] },
   "@/lib/supabase/service": { getSupabaseServiceClient: () => ({}) },
@@ -27,7 +28,7 @@ const imports = {
   },
 };
 vm.runInNewContext(source, {
-  module: loadedModule, exports: loadedModule.exports, process: { env: { CRON_SECRET: "test-secret" } },
+  module: loadedModule, exports: loadedModule.exports, process: { env },
   require: (name) => { if (name in imports) return imports[name]; throw new Error(`Import inesperado: ${name}`); },
 });
 const request = (authorization) => ({ headers: { get: () => authorization } });
@@ -40,4 +41,20 @@ assert.equal(state.persisted, 1, "la memoria se guarda sin configurar Resend");
 assert.equal(result.body.emailStatus, "skipped");
 assert.equal(state.sent, 0);
 assert.ok(state.updates.some((update) => update.snapshot_success_at));
+try {
+  env.ANLUX_BRIEF_RECIPIENT = "test@example.invalid";
+  env.RESEND_API_KEY = "test-key";
+  state.persistenceFails = true;
+  const failed = await loadedModule.exports.GET(request("Bearer test-secret"));
+  assert.equal(failed.status, 503);
+  assert.equal(failed.body.emailStatus, "skipped");
+  assert.equal(state.sent, 0, "un informe incompleto no debe enviarse");
+  state.persistenceFails = false;
+  const recovered = await loadedModule.exports.GET(request("Bearer test-secret"));
+  assert.equal(recovered.status, 200);
+  assert.equal(state.sent, 1, "el informe se envía tras guardar el snapshot");
+} finally {
+  delete env.ANLUX_BRIEF_RECIPIENT;
+  delete env.RESEND_API_KEY;
+}
 console.log("Cron: persistencia independiente de Resend y autenticación preservada.");
