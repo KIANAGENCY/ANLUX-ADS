@@ -37,9 +37,8 @@ export async function fetchRealAds(adAccountId: string): Promise<RealAd[]> {
     name: a.name,
     status: mapEffectiveStatus(a.effective_status ?? a.status),
     effectiveStatus: a.effective_status,
-    // Meta no expone el tipo de creativo en estos campos sin una llamada adicional
-    // al objeto de creativo; se usa un valor genérico para el ícono de la UI.
-    creativeType: "IMAGE",
+    // La consulta no incluye creative; no afirmar un tipo que Meta no confirmó.
+    creativeType: "UNKNOWN",
     previewGradient: REAL_AD_PREVIEW_GRADIENT,
     campaignName: a.campaign?.name ?? "—",
     adSetName: a.adset?.name ?? "—",

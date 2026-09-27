@@ -78,7 +78,7 @@ export interface AdSet {
   startDate?: string;
 }
 
-export type CreativeType = "IMAGE" | "VIDEO" | "CAROUSEL";
+export type CreativeType = "IMAGE" | "VIDEO" | "CAROUSEL" | "UNKNOWN";
 
 export interface Ad {
   id: string;
@@ -185,4 +185,3 @@ export interface DateRange {
   from: string;
   to: string;
 }
-

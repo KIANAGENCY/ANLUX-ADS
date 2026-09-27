@@ -14,4 +14,5 @@ export const CREATIVE_TYPE_LABELS: Record<CreativeType, string> = {
   IMAGE: "Imagen",
   VIDEO: "Video",
   CAROUSEL: "Carrusel",
+  UNKNOWN: "Tipo no disponible",
 };
