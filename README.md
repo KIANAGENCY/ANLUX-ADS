@@ -11,7 +11,7 @@ La integración de Meta es de lectura. El token permanece en el servidor y no se
 ## Funcionalidades actuales
 
 - Autenticación con Supabase Auth.
-- Descubrimiento de cuentas publicitarias accesibles con el token de Meta.
+- Cuenta de Hotel Expert vinculada explícitamente en servidor; no admite todavía organizaciones externas.
 - Soporte opcional para cuentas de cliente de un Business Manager mediante `META_BUSINESS_ID`.
 - Overview con inversión, alcance, impresiones, clics, CTR, CPC, CPM, resultados, costo por resultado y frecuencia.
 - Comparación contra el periodo anterior equivalente.
@@ -75,9 +75,9 @@ Las alertas se calculan con reglas deterministas en `src/lib/alerts/real-engine.
 
 ### Supabase
 
-Supabase se usa para autenticación. No existe sesión demo: si las variables de Supabase faltan, las rutas protegidas quedan cerradas.
+Supabase proporciona autenticación, metas de negocio, observaciones por periodo, historial de decisiones, feedback de calidad y registro de ejecuciones diarias. Las migraciones versionadas están en `supabase/migrations/`. No existe sesión demo: si las variables de Supabase faltan, las rutas protegidas quedan cerradas.
 
-`src/lib/supabase/schema.sql` es únicamente un esquema de referencia para una futura persistencia de snapshots e historial de análisis. No se ejecuta automáticamente.
+Las operaciones manuales usan la sesión del usuario y RLS. La tarea diaria usa un cliente de servicio exclusivamente en servidor. Ambos comparten la misma escritura de snapshots. `src/lib/supabase/schema.sql` es una referencia antigua; las migraciones son la fuente del esquema vigente.
 
 ## Requisitos
 
@@ -132,4 +132,14 @@ Los cambios de integración deben desarrollarse en una rama y validarse antes de
 
 ## Persistencia
 
-Actualmente Meta es la fuente de verdad para métricas. El esquema de Supabase para histórico permanece como referencia y requiere una migración explícita y revisada antes de habilitar escritura o persistencia en producción.
+Meta es la fuente de verdad. La memoria se habilita con `ANLUX_MEMORY_ENABLED=true`. Consultar Intelligence con GET no modifica el historial; POST guarda un snapshot explícito. Los resultados no verificables conservan `result_type=null` y no se usan como conversiones confirmadas.
+
+`/api/cron/daily-brief` está programado a las 13:00 UTC (06:00 en La Paz). Requiere `CRON_SECRET`, `SUPABASE_SECRET_KEY` y memoria habilitada en producción. Registra intentos y resultados en `anlux_cron_runs`; guarda el historial independientemente del correo. `RESEND_API_KEY` y `ANLUX_BRIEF_RECIPIENT` habilitan el envío opcional. La presencia de estas variables no acredita que el scheduler esté activo: verificar una ejecución y el próximo disparo automático en Vercel.
+
+Configuración muestra memoria manual, último intento, último snapshot, error y correo; advierte si pasan 26 horas sin actividad. Un correo fallido no significa que el snapshot haya fallado.
+
+## Límites del piloto
+
+Anuncios destacados clasifica rendimiento; no analiza imágenes, videos ni copy. No se ofrece alta de clientes externos: el aislamiento por organización y OAuth de Meta siguen siendo requisitos bloqueantes documentados en `docs/SAAS_READINESS.md`.
+
+Las 48 decisiones anteriores a la corrección semántica necesitan releerse desde Meta para sus periodos originales. No se deben completar sus tipos de resultado mediante suposiciones. Reparar y verificar primero la tarea diaria; después regenerar los periodos y revisar qué datos sigue pudiendo confirmar Meta.

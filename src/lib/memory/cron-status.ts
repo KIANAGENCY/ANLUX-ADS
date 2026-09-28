@@ -11,6 +11,7 @@ export async function startCronRun(client: SupabaseClient, period: string): Prom
   const { error } = await client.from("anlux_cron_runs").upsert({
     period,
     started_at: new Date().toISOString(),
+    finished_at: null,
     last_error: null,
     email_status: data?.email_status === "sent" ? "sent" : "pending",
   }, { onConflict: "period" });

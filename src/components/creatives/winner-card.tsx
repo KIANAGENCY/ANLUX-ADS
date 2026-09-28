@@ -22,7 +22,7 @@ export function WinnerCard({ winner }: { winner: CreativeWinner }) {
   return (
     <Card className="overflow-hidden border-accent/25">
       <div className={`relative flex h-28 items-center justify-center bg-gradient-to-br ${ad.previewGradient}`}>
-        <Icon className="size-8 text-white/85" />
+        <div className="flex flex-col items-center gap-2"><Icon className="size-8 text-white/85" /><span className="text-xs text-white/75">Vista previa no disponible</span></div>
         <div className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm">
           <Trophy className="size-3.5 text-amber-300" />
         </div>

@@ -9,7 +9,7 @@ Ayudar a una persona a decidir qué hacer con sus campañas de Meta, en lenguaje
 - Lee una cuenta publicitaria de Hotel Expert mediante un token privado del servidor.
 - Evalúa campañas, conjuntos y anuncios con reglas deterministas y muestra gasto, resultados, señales, nivel de confianza y límites.
 - Compara costos entre campañas únicamente si comparten objetivo y acción primaria de resultado, con volumen suficiente. Recomienda comparar calidad o una prueba pequeña; no mueve presupuestos.
-- Permite confirmar metas de negocio y registrar manualmente conversaciones calificadas. La calidad registrada aún no interviene automáticamente en la clasificación.
+- Permite confirmar metas de negocio y registrar manualmente conversaciones calificadas. La calidad registrada interviene en decisiones protegidas cuando coincide con el periodo y el tipo de resultado evaluado.
 - El análisis de IA recibe las mismas decisiones y comparaciones para explicarlas; su salida requiere validación continua frente a datos reales.
 - Una proyección numérica futura queda desactivada hasta tener serie diaria y horizonte temporal definidos.
 
