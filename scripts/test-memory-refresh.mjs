@@ -51,6 +51,7 @@ const client = {
 const repo = load("src/lib/memory/repository.ts", {
   "@/lib/supabase/server": { getSupabaseServerClient: async () => client },
   "./config": { isMemoryEnabled: () => true },
+  "./persist-snapshot": load("src/lib/memory/persist-snapshot.ts", {}),
 });
 const decision = {
   entityType: "campaign", entityId: "123", entityName: "Campaign", campaignId: "123",

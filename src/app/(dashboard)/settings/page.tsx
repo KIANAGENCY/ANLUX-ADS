@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { MemoryHealth } from "@/components/settings/memory-health";
 import { CheckCircle2, CircleDashed } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +8,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isMemoryEnabled } from "@/lib/memory/config";
 import { isActiveProviderConfigured, resolveAIProvider } from "@/lib/ai/config";
 import { MetaHealth } from "@/components/settings/meta-health";
+
+export const dynamic = "force-dynamic";
 
 /** Proveedor de IA activo. Si AI_PROVIDER es inválido se refleja como no configurado. */
 function activeAIProvider(): { label: string; envVars: string[] } {
@@ -51,6 +55,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <MetaHealth />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Comprobando memoria diaria…</p>}><MemoryHealth /></Suspense>
 
       <Card>
         <CardHeader>
@@ -101,7 +106,7 @@ export default function SettingsPage() {
           </p>
           <p>
             El estado real de la conexión aparece también en cada sección: si Meta rechaza el token, las páginas de
-            Overview, Campañas, Conjuntos, Anuncios, Creativos y Alertas muestran el error devuelto por la API,
+            Overview, Campañas, Conjuntos, Anuncios, Anuncios destacados y Alertas muestran el error devuelto por la API,
             sin sustituirlo por datos simulados.
           </p>
           <p>

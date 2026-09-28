@@ -12,7 +12,7 @@ export const NAV_ITEMS = [
   { href: "/campaigns", label: "Campañas", icon: Megaphone },
   { href: "/adsets", label: "Conjuntos", icon: Layers },
   { href: "/ads", label: "Anuncios", icon: ImageIcon },
-  { href: "/creatives", label: "Creativos", icon: Trophy },
+  { href: "/creatives", label: "Anuncios destacados", icon: Trophy },
   { href: "/intelligence", label: "Intelligence", icon: Radar },
   { href: "/decisions", label: "Decisiones", icon: BrainCircuit },
   { href: "/ai-analyst", label: "AI Analyst", icon: Sparkles },

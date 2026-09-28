@@ -6,12 +6,12 @@ import { isSupabaseConfigured, supabasePublishableKey, supabaseUrl } from "./con
 /**
  * Cliente de Supabase para Server Components, Server Actions y Route
  * Handlers. Lee/escribe la sesión a través de las cookies de Next.js.
- * Devuelve `null` en modo demo.
+ * Devuelve `null` si Supabase no está configurado.
  *
  * Nota: esta fase solo usa la clave pública (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`),
  * la misma que el cliente de navegador, y por tanto respeta Row Level
- * Security. Un cliente con la clave secreta (bypass de RLS, antes llamada
- * `service_role`) se añadirá en una fase posterior solo si hace falta.
+ * Security. El proceso programado usa otro cliente exclusivamente en servidor;
+ * las operaciones de usuario mantienen RLS.
  */
 export async function getSupabaseServerClient(): Promise<SupabaseClient | null> {
   if (!isSupabaseConfigured()) return null;

@@ -1,5 +1,6 @@
 "use client";
 
+import { HistoryFeedback } from "@/components/decisions/history-feedback";
 import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { PortfolioCard } from "@/components/decisions/portfolio-card";
@@ -67,6 +68,7 @@ export default function DecisionsPage() {
           <p className="text-xs leading-5 text-muted-foreground">Costo por resultado significa cuánto invertiste, en promedio, por cada resultado del tipo reportado por Meta. Antes de cambiar presupuesto, confirma si esos resultados se convirtieron en clientes valiosos.</p>
         </div>
       )}
+      <HistoryFeedback />
     </div>
   );
 }

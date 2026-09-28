@@ -16,7 +16,7 @@ export default function CreativesPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Anuncios que lideran en al menos una métrica clave durante el periodo seleccionado.
+        Anuncios que destacan por sus métricas durante el periodo seleccionado. Esta sección evalúa rendimiento; el análisis de imagen, video y texto aún no está disponible.
       </p>
 
       {error && <ErrorBanner message={error} />}

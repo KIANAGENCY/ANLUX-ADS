@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const mod = { exports: {} };
+vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/memory/cron-health.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: mod, exports: mod.exports });
+const evaluate = mod.exports.evaluateCronHealth;
+const now = Date.parse('2026-09-28T18:00:00Z');
+const run = { period: '2026-09-27', started_at: '2026-09-28T13:00:00Z', finished_at: '2026-09-28T13:01:00Z', snapshot_success_at: '2026-09-28T13:00:50Z', last_error: null, email_status: 'sent' };
+assert.equal(evaluate(null, null, now).state, 'never_run');
+assert.equal(evaluate(run, run.snapshot_success_at, now).state, 'healthy');
+assert.equal(evaluate(run, run.snapshot_success_at, now + 27 * 3600000).state, 'stale');
+assert.equal(evaluate({ ...run, last_error: 'snapshot_failed' }, run.snapshot_success_at, now).state, 'failed');
+assert.equal(evaluate({ ...run, last_error: 'email_failed', email_status: 'failed' }, run.snapshot_success_at, now).state, 'healthy');
+assert.equal(evaluate({ ...run, finished_at: null }, run.snapshot_success_at, now).state, 'failed');
+assert.equal(evaluate({ ...run, started_at: new Date(now - 60000).toISOString(), finished_at: null }, run.snapshot_success_at, now).state, 'running');
+assert.equal(evaluate({ ...run, started_at: 'invalid' }, run.snapshot_success_at, now).state, 'stale');
+console.log('Cron health: never run, stale, failed, running and independent email state verified.');
