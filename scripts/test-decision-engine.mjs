@@ -25,6 +25,8 @@ function input(overrides = {}) {
     campaignId: "cmp_1",
     campaignName: "Campaña prueba",
     objective: "LEAD_GENERATION",
+    currentResultsAvailable: true,
+    previousResultsAvailable: true,
     current: metrics(),
     previous: metrics(),
     ...overrides,
@@ -126,5 +128,35 @@ const unknown = evaluateDecision(
 );
 assert.notEqual(unknown.action, "SCALE", "un objetivo UNKNOWN nunca debe generar escalado agresivo");
 assert.notEqual(unknown.action, "PAUSE_CANDIDATE", "un objetivo UNKNOWN nunca debe generar pausa agresiva");
+
+const lowMessageSample = evaluateDecision(input({
+  objective: "MESSAGES",
+  resultType: "onsite_conversion.messaging_conversation_started_7d",
+  previousResultType: "onsite_conversion.messaging_conversation_started_7d",
+  currentResultsAvailable: true,
+  previousResultsAvailable: true,
+  startDate: "2020-01-01",
+  current: metrics({ spend: 58.07, impressions: 42000, clicks: 42, results: 2, cpc: 1.38, ctr: 1.3, costPerResult: 29.04 }),
+  previous: metrics({ spend: 42.09, impressions: 18000, clicks: 17, results: 3, cpc: 2.48, ctr: 0.9, costPerResult: 14.03 }),
+}));
+assert.equal(lowMessageSample.action, "WATCH", "CPC mejor no debe contradecir CPR peor con solo dos conversaciones");
+assert.equal(lowMessageSample.score, 50, "una muestra insuficiente mantiene puntaje neutral");
+assert.equal(lowMessageSample.suggestedChangePercent, null);
+assert.ok(lowMessageSample.signals.some((signal) => signal.code === "outcome_sample_insufficient"));
+assert.ok(lowMessageSample.signals.some((signal) => signal.code === "cpc_down"), "CPC queda como diagnóstico secundario");
+
+const differentResultTypes = evaluateDecision(input({
+  objective: "MESSAGES",
+  resultType: "onsite_conversion.messaging_conversation_started_7d",
+  previousResultType: "purchase",
+  currentResultsAvailable: true,
+  previousResultsAvailable: true,
+  startDate: "2020-01-01",
+  current: metrics({ results: 5, cpc: 0.8, costPerResult: 10 }),
+  previous: metrics({ results: 5, cpc: 1, costPerResult: 20 }),
+}));
+assert.equal(differentResultTypes.action, "WATCH", "acciones de resultado distintas no justifican una recomendación direccional");
+assert.equal(differentResultTypes.score, 50);
+assert.ok(!differentResultTypes.signals.some((signal) => signal.code === "cpr_down_strong"));
 
 console.log("Decision Engine: guardarraíles de mensajes correctos.");

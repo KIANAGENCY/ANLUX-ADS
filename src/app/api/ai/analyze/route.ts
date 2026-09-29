@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIAnalystService } from "@/lib/ai";
 import { buildRealAlertsFromMetrics } from "@/lib/alerts/real-engine";
-import { generateRealDecisions } from "@/lib/decisions/real-engine";
+import { generateRealDecisions, type RealDecisionSnapshot } from "@/lib/decisions/real-engine";
 import type { PerformanceDecision, PortfolioRecommendation } from "@/lib/decisions/types";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
@@ -166,11 +166,13 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
     };
   }
 
-  const [adSets, adSetInsights, ads, adInsights] = await Promise.all([
+  const [adSets, adSetInsights, previousAdSetInsights, ads, adInsights, previousAdInsights] = await Promise.all([
     fetchRealAdSets(accountId),
     fetchAggregatedInsightsByEntity(accountId, "adset", dateRange.from, dateRange.to),
+    fetchAggregatedInsightsByEntity(accountId, "adset", previousRange.from, previousRange.to),
     fetchRealAds(accountId),
     fetchAggregatedInsightsByEntity(accountId, "ad", dateRange.from, dateRange.to),
+    fetchAggregatedInsightsByEntity(accountId, "ad", previousRange.from, previousRange.to),
   ]);
 
   const adSetMetrics: Record<string, PerformanceMetrics> = {};
@@ -209,7 +211,27 @@ async function gatherAccountData(accountId: string, dateRange: DateRange): Promi
 
   // El mismo motor que alimenta la página de decisiones aplica la evidencia humana
   // del periodo exacto y las salvaguardas de reasignación de cartera.
-  const official = await generateRealDecisions(accountId, dateRange, { targetCostPerResult });
+  const snapshot: RealDecisionSnapshot = {
+    accounts,
+    campaigns,
+    adSets,
+    ads,
+    currentCampaignRows: currentInsights,
+    previousCampaignRows: previousInsights,
+    currentAdSetRows: adSetInsights,
+    previousAdSetRows: previousAdSetInsights,
+    currentAdRows: adInsights,
+    previousAdRows: previousAdInsights,
+    accountRow: null,
+    accountMetrics: {
+      spend: currentMetrics.spend,
+      impressions: currentMetrics.impressions,
+      reach: currentMetrics.reach,
+      clicks: currentMetrics.clicks,
+      results: currentMetrics.results,
+    },
+  };
+  const official = await generateRealDecisions(accountId, dateRange, { targetCostPerResult, snapshot });
 
   return {
     client,
