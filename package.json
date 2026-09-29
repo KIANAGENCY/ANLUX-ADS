@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:decisions": "node scripts/test-decision-evidence.mjs",
     "test:ai": "node scripts/test-ai-modes.mjs",
     "test:health": "node scripts/test-meta-health.mjs"
   },
@@ -38,3 +37,4 @@
     "typescript": "^5"
   }
 }
+
