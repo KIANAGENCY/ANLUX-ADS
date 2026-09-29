@@ -50,11 +50,12 @@ function scoreCommon(signals: DecisionSignal[], current: PerformanceMetrics, pre
   }
   return score;
 }
-function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null, resultsAvailable?: boolean, resultType?: string | null) {
+function scoreDirect(signals: DecisionSignal[], current: PerformanceMetrics, previous: PerformanceMetrics, target?: number | null, resultsAvailable?: boolean, resultType?: string | null, previousResultType?: string | null) {
   let score = 0;
   const resultLabel = resultType === MESSAGING_CONVERSATION_ACTION ? "conversación" : "resultado";
   const cpr = percentChange(current.costPerResult, previous.costPerResult);
-  if (current.results >= 3 && previous.results >= 3 && cpr !== null) {
+  const comparableResultType = !resultType || !previousResultType || resultType === previousResultType;
+  if (comparableResultType && current.results >= 3 && previous.results >= 3 && cpr !== null) {
     if (cpr <= -20) { score += 25; addSignal(signals, "cpr_down_strong", `Costo por ${resultLabel} mejoró`, `El costo bajó ${Math.abs(cpr).toFixed(1)}%.`, 25); }
     else if (cpr >= 30) { score -= 25; addSignal(signals, "cpr_up_strong", `Costo por ${resultLabel} empeoró`, `El costo subió ${cpr.toFixed(1)}%.`, -25); }
     else if (cpr >= 15) { score -= 12; addSignal(signals, "cpr_up", `Costo por ${resultLabel} empeoró`, `El costo subió ${cpr.toFixed(1)}%.`, -12); }
@@ -98,6 +99,17 @@ function deriveAction(input: DecisionEntityInput, score: number, level: Decision
     return "PAUSE_CANDIDATE";
   }
 
+  // For direct-response campaigns, clicks and CPC are diagnostic signals only.
+  // Require at least three confirmed primary outcomes in both periods before
+  // allowing them to produce a directional budget recommendation.
+  if (family(input.objective) === "direct" &&
+    !signals.some((signal) => signal.code === "pause_locks_incomplete")) {
+    const comparableOutcomeSample = input.currentResultsAvailable === true &&
+      input.previousResultsAvailable === true && input.current.results >= 3 && input.previous.results >= 3 &&
+      (!input.resultType || !input.previousResultType || input.resultType === input.previousResultType);
+    if (!comparableOutcomeSample) return "WATCH";
+  }
+
   if (family(input.objective) === "unknown") return score >= 60 ? "MAINTAIN" : "WATCH";
   if (score >= 75 && level !== "low") return "SCALE";
   if (score >= 60) return "MAINTAIN";
@@ -132,11 +144,24 @@ function rationale(action: DecisionAction, level: DecisionConfidence, input: Dec
 export function evaluateDecision(input: DecisionEntityInput): PerformanceDecision {
   const signals: DecisionSignal[] = [];
   let score = 50 + scoreCommon(signals, input.current, input.previous);
-  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult, input.currentResultsAvailable, input.resultType);
+  if (family(input.objective) === "direct") score += scoreDirect(signals, input.current, input.previous, input.targetCostPerResult, input.currentResultsAvailable, input.resultType, input.previousResultType);
   else if (family(input.objective) === "traffic") score += scoreTraffic(signals, input.current, input.previous);
   if (input.current.frequency > FATIGUE_FREQUENCY_THRESHOLD) { score -= 15; addSignal(signals, "frequency_fatigue", "Exposición repetida", `La audiencia vio el anuncio ${input.current.frequency.toFixed(2)} veces en promedio.`, -15); }
   score = clampScore(score);
   const level = confidence(input.objective, input.current, input.previous);
+  const comparableOutcomeSample = input.currentResultsAvailable === true &&
+    input.previousResultsAvailable === true && input.current.results >= 3 && input.previous.results >= 3 &&
+    (!input.resultType || !input.previousResultType || input.resultType === input.previousResultType);
+  const outcomeSampleInsufficient = family(input.objective) === "direct" && !comparableOutcomeSample &&
+    !((input.objective === "MESSAGES" || input.resultType === MESSAGING_CONVERSATION_ACTION) && input.currentResultsAvailable === true && input.current.results === 0);
+  if (outcomeSampleInsufficient) {
+    addSignal(signals, "outcome_sample_insufficient", "Faltan conversiones comparables", "El volumen de resultados no permite confirmar una mejora o caída del rendimiento comercial; CPC y clics solo sirven como diagnóstico del tráfico.", 0);
+    // Keep the score neutral so a favorable CPC cannot appear as a healthy result.
+    score = 50;
+  }
   const action = deriveAction(input, score, level, signals);
-  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, resultType: input.resultType ?? null, previousResultType: input.previousResultType ?? null, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: rationale(action, level, input, signals), signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
+  const explanation = outcomeSampleInsufficient && action === "WATCH"
+    ? `Aún no hay conversiones comparables suficientes para evaluar el costo por resultado. CPC y clics ayudan a diagnosticar el tráfico, pero no prueban una mejora comercial; observar antes de mover presupuesto. Confianza ${level === "high" ? "alta" : level === "medium" ? "media" : "baja"}.`
+    : rationale(action, level, input, signals);
+  return { id: `decision_${input.entityType}_${input.entityId}`, entityType: input.entityType, entityId: input.entityId, entityName: input.entityName, campaignId: input.campaignId, campaignName: input.campaignName, objective: input.objective, resultType: input.resultType ?? null, previousResultType: input.previousResultType ?? null, action, score, confidence: level, risk: risk(action, level), suggestedChangePercent: action === "SCALE" ? (level === "high" ? 15 : 10) : action === "REDUCE" ? (level === "high" ? -15 : -10) : null, rationale: explanation, signals: signals.sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)), currentMetrics: input.current, previousMetrics: input.previous, currentResultsAvailable: input.currentResultsAvailable, previousResultsAvailable: input.previousResultsAvailable, startDate: input.startDate ?? null, generatedAt: new Date().toISOString() };
 }

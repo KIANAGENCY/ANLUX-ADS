@@ -1,9 +1,11 @@
 import "server-only";
 import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { fetchRealAds } from "@/lib/meta/real/ads";
+import type { RealAd } from "@/lib/meta/real/ads";
 import { fetchRealAdSets } from "@/lib/meta/real/adsets";
+import type { RealAdSet } from "@/lib/meta/real/adsets";
 import { fetchRealCampaigns } from "@/lib/meta/real/campaigns";
-import { fetchAccountAggregatedInsight, fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics, primaryResultType } from "@/lib/meta/real/insights";
+import { fetchAccountAggregatedInsight, fetchAggregatedInsightsByEntity, hasPrimaryResult, mapInsightsRowToDailyMetrics, primaryResultType, type RawInsightsRow } from "@/lib/meta/real/insights";
 import { accountObservationMetrics } from "./account-metrics";
 import type { CampaignObjective, DateRange, PerformanceMetrics } from "@/lib/types";
 import { getPreviousPeriod } from "@/lib/utils/dates";
@@ -12,6 +14,23 @@ import { evaluateDecisionSafely } from "./safe-evaluate";
 import { recommendPortfolio } from "./portfolio";
 import { applyQualityEvidence, loadExactQuality } from "./quality";
 import type { DecisionEngineResult, DecisionEngineSummary, PerformanceDecision } from "./types";
+import type { Campaign, MetaAdAccountSummary } from "@/lib/types";
+
+type EntityInsights = Awaited<ReturnType<typeof fetchAggregatedInsightsByEntity>>;
+export interface RealDecisionSnapshot {
+  accounts: MetaAdAccountSummary[];
+  campaigns: Campaign[];
+  adSets: RealAdSet[];
+  ads: RealAd[];
+  currentCampaignRows: EntityInsights;
+  previousCampaignRows: EntityInsights;
+  currentAdSetRows: EntityInsights;
+  previousAdSetRows: EntityInsights;
+  currentAdRows: EntityInsights;
+  previousAdRows: EntityInsights;
+  accountRow: RawInsightsRow | null;
+  accountMetrics?: Pick<PerformanceMetrics, "spend" | "impressions" | "reach" | "clicks" | "results">;
+}
 
 function emptyMetrics(): PerformanceMetrics {
   return aggregateMetrics([]);
@@ -85,11 +104,11 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
  * Genera recomendaciones determinísticas usando exclusivamente datos reales de Meta.
  * No existe ninguna llamada de escritura ni al Marketing API ni a un proveedor de IA.
  */
-export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null; service?: boolean }): Promise<DecisionEngineResult> {
+export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null; service?: boolean; snapshot?: RealDecisionSnapshot }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
-  const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow] =
-    await Promise.all([
+  const snapshot = options?.snapshot ?? await (async (): Promise<RealDecisionSnapshot> => {
+    const [accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow] = await Promise.all([
       fetchAdAccounts(),
       fetchRealCampaigns(accountId),
       fetchRealAdSets(accountId),
@@ -102,10 +121,13 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
       fetchAggregatedInsightsByEntity(accountId, "ad", previous.from, previous.to),
       fetchAccountAggregatedInsight(accountId, range.from, range.to),
     ]);
+    return { accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow };
+  })();
+  const { accounts, campaigns, adSets, ads, currentCampaignRows, previousCampaignRows, currentAdSetRows, previousAdSetRows, currentAdRows, previousAdRows, accountRow } = snapshot;
 
   const currency = accounts.find((account) => account.id === accountId)?.currency ?? null;
   const objectives = new Map(campaigns.map((campaign) => [campaign.id, campaign.objective]));
-  const accountMetrics = accountObservationMetrics(accountRow, currentCampaignRows, objectives);
+  const accountMetrics = snapshot.accountMetrics ?? accountObservationMetrics(accountRow, currentCampaignRows, objectives);
   const currentAccountAverageCpc = accountAverageCpc(currentCampaignRows);
   const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   const decisions: PerformanceDecision[] = [];
