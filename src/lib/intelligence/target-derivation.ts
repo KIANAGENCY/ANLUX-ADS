@@ -1,10 +1,11 @@
 export interface TargetDerivationObservation {
+  campaignId: string;
   periodFrom: string;
   periodTo: string;
   objective: string | null | undefined;
   resultType?: string | null;
   resultsAvailable?: boolean | null;
-  costPerResult: number | null | undefined;
+  spend: number | null | undefined;
   results: number | null | undefined;
 }
 
@@ -15,26 +16,37 @@ export interface TargetProposal {
 }
 
 /**
- * Proposes the 25th percentile of verified messaging observations. It deliberately
- * returns null instead of normalising weak or incomplete historical evidence.
+ * Proposes the median daily account CPA from verified messaging campaign snapshots.
+ * Rolling windows and duplicate campaign/day rows are excluded to avoid overlap.
  */
 export function deriveMessagingTarget(observations: readonly TargetDerivationObservation[]): TargetProposal | null {
   const eligible = observations.filter((observation) =>
     observation.resultType === "onsite_conversion.messaging_conversation_started_7d" &&
     observation.resultsAvailable === true &&
-    Number.isFinite(observation.costPerResult) &&
-    (observation.costPerResult ?? 0) > 0 &&
+    Boolean(observation.campaignId) &&
+    observation.periodFrom === observation.periodTo &&
+    Number.isFinite(observation.spend) &&
+    (observation.spend ?? -1) >= 0 &&
     Number.isFinite(observation.results) &&
-    (observation.results ?? 0) >= 0
+    (observation.results ?? -1) >= 0
   );
-  const periods = new Set(eligible.map((observation) => `${observation.periodFrom}:${observation.periodTo}`));
-  const conversations = eligible.reduce((total, observation) => total + (observation.results ?? 0), 0);
-  if (periods.size < 3 || conversations < 10) return null;
+  const campaignDays = new Set<string>();
+  const daily = new Map<string, { spend: number; results: number }>();
+  for (const row of eligible) {
+    const campaignDay = `${row.periodFrom}:${row.campaignId}`;
+    if (campaignDays.has(campaignDay)) continue;
+    campaignDays.add(campaignDay);
+    const totals = daily.get(row.periodFrom) ?? { spend: 0, results: 0 };
+    totals.spend += row.spend as number;
+    totals.results += row.results as number;
+    daily.set(row.periodFrom, totals);
+  }
+  const conversations = [...daily.values()].reduce((total, day) => total + day.results, 0);
+  if (daily.size < 7 || conversations < 15) return null;
 
-  const values = eligible.map((observation) => observation.costPerResult as number).sort((a, b) => a - b);
-  const index = (values.length - 1) * 0.25;
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  const targetCostPerResult = values[lower] + (values[upper] - values[lower]) * (index - lower);
-  return { targetCostPerResult, periods: periods.size, conversations };
+  const values = [...daily.values()].filter(({ results }) => results > 0).map(({ spend, results }) => spend / results).sort((a, b) => a - b);
+  if (values.length < 7) return null;
+  const middle = Math.floor(values.length / 2);
+  const targetCostPerResult = values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+  return { targetCostPerResult, periods: daily.size, conversations };
 }

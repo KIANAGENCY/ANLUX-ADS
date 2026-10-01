@@ -74,7 +74,7 @@ function scoreTraffic(signals: DecisionSignal[], current: PerformanceMetrics, pr
   return 0;
 }
 function pauseThreshold(input: DecisionEntityInput): number | null {
-  const basis = input.typicalCostPerResult ?? input.targetCostPerResult ?? null;
+  const basis = input.targetCostPerResult ?? input.typicalCostPerResult ?? null;
   return basis != null && basis > 0 ? basis * PAUSE_TYPICAL_COST_MULTIPLIER : null;
 }
 function deriveAction(input: DecisionEntityInput, score: number, level: DecisionConfidence, signals: DecisionSignal[]): DecisionAction {

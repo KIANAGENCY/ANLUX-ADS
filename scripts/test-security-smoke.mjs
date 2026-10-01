@@ -57,6 +57,11 @@ async function testSecurityHeaders() {
   assert(Boolean(res.headers.get("strict-transport-security")), "HSTS presente");
   assert(Boolean(res.headers.get("referrer-policy")), "Referrer-Policy presente");
   assert(Boolean(res.headers.get("permissions-policy")), "Permissions-Policy presente");
+  const csp = res.headers.get("content-security-policy") ?? "";
+  const nonce = csp.match(/script-src[^;]*'nonce-([^']+)'/)?.[1];
+  assert(Boolean(nonce), "CSP con nonce por solicitud presente");
+  const html = await res.text();
+  assert(html.includes(`nonce="${nonce}"`), "los scripts renderizados reciben el nonce de CSP");
   assert(!res.headers.has("x-powered-by"), "X-Powered-By oculto");
 }
 

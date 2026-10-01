@@ -12,6 +12,7 @@ vm.runInNewContext(source, {
   module: mod, exports: mod.exports,
   require(name) {
     if (name === "server-only") return {};
+    if (name === "@/lib/intelligence/target-derivation") return { deriveMessagingTarget };
     if (name === "@/lib/supabase/server") return { getSupabaseServerClient: async () => null };
     if (name === "@/lib/supabase/service") return { getSupabaseServiceClient: () => null };
     throw new Error(`Unexpected import: ${name}`);
@@ -31,13 +32,22 @@ assert.equal(mod.exports.applyQualityEvidence(base, 31), base, "invalid human co
 assert.equal(mod.exports.applyQualityEvidence(base, undefined), base, "missing feedback is not invented");
 assert.equal(mod.exports.applyQualityEvidence({ ...base, resultType: "purchase" }, 3).action, "SCALE");
 
-const history = ["2026-09-01", "2026-09-08", "2026-09-15"].map((from, i) => ({
-  periodFrom: from, periodTo: from, objective: "CONVERSIONS",
+const history = Array.from({ length: 7 }, (_, i) => ({
+  campaignId: `campaign-${i % 2}`,
+  periodFrom: `2026-09-${String(i + 1).padStart(2, "0")}`,
+  periodTo: `2026-09-${String(i + 1).padStart(2, "0")}`,
+  objective: "CONVERSIONS",
   resultType: "onsite_conversion.messaging_conversation_started_7d", resultsAvailable: true,
-  results: 12, costPerResult: 18 + i,
+  results: 3, spend: 54 + i * 3,
 }));
 assert.ok(deriveMessagingTarget(history), "CONVERSIONS with messaging outcomes is eligible");
 assert.equal(deriveMessagingTarget(history.map((row) => ({ ...row, resultType: null }))), null,
   "unknown historic result types cannot be reinterpreted");
 assert.equal(deriveMessagingTarget(history.map((row) => ({ ...row, resultsAvailable: false }))), null);
+assert.equal(deriveMessagingTarget(history.map((row) => ({ ...row, periodTo: "2026-09-30" }))), null,
+  "overlapping rolling windows are excluded");
+assert.equal(deriveMessagingTarget(history.slice(0, 6)), null, "fewer than seven daily samples is insufficient");
+assert.equal(deriveMessagingTarget([...history, history[0]] )?.periods, 7, "duplicate campaign/day rows do not increase the sample size");
+assert.equal(deriveMessagingTarget(history.map((row) => ({ ...row, results: 0 }))), null,
+  "zero-conversation history cannot produce an account CPA");
 console.log("Quality evidence and messaging target guards passed.");

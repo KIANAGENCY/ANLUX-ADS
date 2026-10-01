@@ -49,6 +49,11 @@ Deno.serve(async (req: Request) => {
       return reply({ error: "Introduce un correo válido." }, 400);
     }
 
+    const { data: existingMember, error: memberLookupError } = await supabase
+      .from("users").select("id").ilike("email", email).maybeSingle();
+    if (memberLookupError) return reply({ error: "No se pudo validar el acceso del usuario." }, 503);
+    if (existingMember) return reply({ error: "Ese correo ya tiene acceso. Utiliza recuperación de contraseña si lo necesita." }, 409);
+
     const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${site}/reset-password`,
     });
@@ -69,15 +74,24 @@ Deno.serve(async (req: Request) => {
       return reply({ error: "La invitación se creó sin un usuario asociado." }, 502);
     }
 
-    const { error: roleError } = await supabase.auth.admin.updateUserById(invitedUser.id, {
-      app_metadata: {
-        ...(invitedUser.app_metadata ?? {}),
-        anlux_role: "member",
-      },
+    const { error: memberError } = await supabase.from("users").insert({
+      id: invitedUser.id,
+      email: invitedUser.email ?? email,
+      role: "analyst",
     });
+    if (memberError) {
+      await supabase.auth.admin.deleteUser(invitedUser.id);
+      return reply({ error: "No se pudo preparar el acceso del usuario. La invitación fue cancelada." }, 503);
+    }
 
+    const { error: roleError } = await supabase.auth.admin.updateUserById(invitedUser.id, {
+      app_metadata: { ...(invitedUser.app_metadata ?? {}), anlux_role: "member" },
+    });
     if (roleError) {
-      return reply({ error: "La invitación fue enviada, pero no se pudo habilitar el acceso. Revisa el usuario antes de reenviar." }, 502);
+      const { error: rollbackError } = await supabase.from("users").delete().eq("id", invitedUser.id);
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(invitedUser.id);
+      if (rollbackError || deleteError) console.error("No se pudo completar la reversión de una invitación fallida.");
+      return reply({ error: "No se pudo preparar el acceso del usuario. La invitación fue cancelada." }, 503);
     }
 
     return reply({ success: true });
