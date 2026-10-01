@@ -18,7 +18,10 @@ export function GoogleAnalytics() {
   const pathname = usePathname();
   useEffect(() => {
     if (!validMeasurementId || !window.gtag || !pathname) return;
-    window.gtag("event", "page_view", { page_path: pathname });
+    window.gtag("event", "page_view", {
+      page_location: `${window.location.origin}${pathname}`,
+      page_title: document.title,
+    });
   }, [pathname]);
   if (!validMeasurementId) return null;
   return <>
