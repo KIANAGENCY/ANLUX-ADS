@@ -12,7 +12,7 @@ import { getPreviousPeriod } from "@/lib/utils/dates";
 import { aggregateMetrics } from "@/lib/utils/metrics";
 import { evaluateDecisionSafely } from "./safe-evaluate";
 import { recommendPortfolio } from "./portfolio";
-import { applyQualityEvidence, loadExactQuality } from "./quality";
+import { applyQualityEvidence, loadExactQuality, loadTypicalMessagingCost } from "./quality";
 import type { DecisionEngineResult, DecisionEngineSummary, PerformanceDecision } from "./types";
 import type { Campaign, MetaAdAccountSummary } from "@/lib/types";
 
@@ -104,7 +104,7 @@ function sortDecisions(decisions: PerformanceDecision[]): PerformanceDecision[] 
  * Genera recomendaciones determinísticas usando exclusivamente datos reales de Meta.
  * No existe ninguna llamada de escritura ni al Marketing API ni a un proveedor de IA.
  */
-export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null; service?: boolean; snapshot?: RealDecisionSnapshot }): Promise<DecisionEngineResult> {
+export async function generateRealDecisions(accountId: string, range: DateRange, options?: { targetCostPerResult?: number | null; typicalCostPerResult?: number | null; service?: boolean; snapshot?: RealDecisionSnapshot }): Promise<DecisionEngineResult> {
   const previous = getPreviousPeriod(range);
 
   const snapshot = options?.snapshot ?? await (async (): Promise<RealDecisionSnapshot> => {
@@ -131,6 +131,14 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
   const currentAccountAverageCpc = accountAverageCpc(currentCampaignRows);
   const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   const decisions: PerformanceDecision[] = [];
+  let typicalCostPerResult = options?.typicalCostPerResult ?? null;
+  if (typicalCostPerResult === null) {
+    try {
+      typicalCostPerResult = await loadTypicalMessagingCost(accountId, range.to, options?.service);
+    } catch (error) {
+      console.error("No se pudo consultar costo histórico diario; se omite esta referencia.", error);
+    }
+  }
 
   for (const campaign of campaigns) {
     if (campaign.status !== "ACTIVE") continue;
@@ -156,6 +164,7 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, campaign.objective)),
         startDate: campaign.startDate ?? null,
         targetCostPerResult: options?.targetCostPerResult ?? null,
+        typicalCostPerResult,
         accountAverageCpc: currentAccountAverageCpc,
       })
     );
@@ -187,6 +196,7 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
         startDate: adSet.startDate ?? campaign?.startDate ?? null,
         targetCostPerResult: options?.targetCostPerResult ?? null,
+        typicalCostPerResult,
         accountAverageCpc: currentAccountAverageCpc,
       })
     );
@@ -218,6 +228,7 @@ export async function generateRealDecisions(accountId: string, range: DateRange,
         previousResultsAvailable: Boolean(previousRow && hasPrimaryResult(previousRow, objective)),
         startDate: ad.startDate ?? campaign?.startDate ?? null,
         targetCostPerResult: options?.targetCostPerResult ?? null,
+        typicalCostPerResult,
         accountAverageCpc: currentAccountAverageCpc,
       })
     );

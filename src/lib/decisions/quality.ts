@@ -2,6 +2,7 @@ import "server-only";
 import type { PerformanceDecision } from "./types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
+import { deriveMessagingTarget } from "@/lib/intelligence/target-derivation";
 
 export async function loadExactQuality(accountId: string, from: string, to: string, service = false): Promise<Map<string, number>> {
   const client = service ? getSupabaseServiceClient() : await getSupabaseServerClient();
@@ -18,6 +19,35 @@ export async function loadExactQuality(accountId: string, from: string, to: stri
     grouped.set(row.campaign_id, values);
   }
   return new Map([...grouped].filter(([, values]) => values.length === 1).map(([id, values]) => [id, values[0]]));
+}
+
+/** Uses only verified daily campaign snapshots; insufficient history yields no baseline. */
+export async function loadTypicalMessagingCost(accountId: string, through: string, service = false): Promise<number | null> {
+  const client = service ? getSupabaseServiceClient() : await getSupabaseServerClient();
+  if (!client) return null;
+  const end = new Date(`${through}T00:00:00.000Z`);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 55);
+  const from = start.toISOString().slice(0, 10);
+  const { data, error } = await client.from("decision_history")
+    .select("period_from,period_to,campaign_id,result_type,current_results_available,metrics_current")
+    .eq("ad_account_id", accountId).eq("entity_type", "campaign")
+    .gte("period_from", from).lte("period_to", through);
+  if (error) throw error;
+  const proposal = deriveMessagingTarget((data ?? []).map((row) => {
+    const metrics = row.metrics_current && typeof row.metrics_current === "object" ? row.metrics_current as Record<string, unknown> : {};
+    return {
+      campaignId: row.campaign_id,
+      periodFrom: row.period_from,
+      periodTo: row.period_to,
+      objective: null,
+      resultType: row.result_type,
+      resultsAvailable: row.current_results_available,
+      spend: typeof metrics.spend === "number" ? metrics.spend : null,
+      results: typeof metrics.results === "number" ? metrics.results : null,
+    };
+  }));
+  return proposal?.targetCostPerResult ?? null;
 }
 
 /** A second layer of human evidence; Meta's reported outcomes remain unchanged. */
