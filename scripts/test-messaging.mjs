@@ -77,6 +77,7 @@ async function main() {
   const fallbackRequests = [];
   const fallback = createService(async (_, params) => {
     fallbackRequests.push(params);
+    if (params.breakdowns || params.action_breakdowns === 'action_type,conversion_destination') throw new MetaApiError('unknown', 'Unsupported conversion destination');
     if (params.level === 'campaign' && params.action_breakdowns) return { data: [{ campaign_id: 'c1', actions: [action('12')] }] };
     if (params.level === 'adset' && params.action_breakdowns) throw Error('Unsupported breakdown at ad set level');
     if (params.level === 'ad' && params.action_breakdowns) return { data: [{ campaign_id: 'c1', ad_id: 'ad-1', actions: [action('8', 'whatsapp'), action('4', 'messenger')] }] };
@@ -86,8 +87,20 @@ async function main() {
   assert.equal(fallbackReport.campaigns[0].conversations, 12);
   assert.equal(JSON.stringify(fallbackReport.campaigns[0].details.map(d => [d.destination, d.conversations])), JSON.stringify([['WhatsApp', 8], ['Messenger', 4]]));
   assert.equal(fallbackReport.warnings.length, 0);
-  assert.deepEqual(fallbackRequests.filter(r => r.action_breakdowns).map(r => r.level), ['campaign', 'adset', 'ad']);
-  assert.ok(fallbackRequests.filter(r => r.action_breakdowns).every(r => !('breakdowns' in r)));
+  assert.deepEqual(fallbackRequests.filter(r => r.action_breakdowns === 'action_type,action_destination').map(r => r.level), ['campaign', 'adset', 'ad']);
+  assert.ok(fallbackRequests.every(r => r.breakdowns !== 'publisher_platform'));
+  const conversionRows = createService(async (_, params) => params.breakdowns === 'conversion_destination'
+    ? { data: [{ campaign_id: 'c1', conversion_destination: 'WHATSAPP', actions: [action('7')] }, { campaign_id: 'c1', conversion_destination: 'MESSENGER', actions: [action('5')] }] }
+    : { data: totals });
+  const conversionReport = await conversionRows.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
+  assert.equal(JSON.stringify(conversionReport.campaigns[0].details.map(d => [d.destination, d.conversations])), JSON.stringify([['WhatsApp', 7], ['Messenger', 5]]));
+  assert.equal(conversionReport.campaigns[0].conversations, 12);
+  const conversionActions = createService(async (_, params) => {
+    if (params.breakdowns) throw new MetaApiError('unknown', 'Unsupported row breakdown');
+    if (params.action_breakdowns === 'action_type,conversion_destination') return { data: [{ campaign_id: 'c1', actions: [{ action_type: event, value: '12', conversion_destination: 'INSTAGRAM_DIRECT' }] }] };
+    return { data: totals };
+  });
+  assert.equal((await conversionActions.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15')).campaigns[0].details[0].destination, 'Instagram Direct');
   const noDetails = createService(async (_, params) => params.action_breakdowns
     ? { data: [{ campaign_id: 'c1', actions: [action('12')] }] }
     : { data: totals });

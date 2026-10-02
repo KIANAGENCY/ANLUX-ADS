@@ -5,6 +5,7 @@ export interface MessagingAction {
   action_type: string;
   value?: string | number;
   action_destination?: string;
+  conversion_destination?: string;
 }
 
 export interface MessagingDetail {
@@ -50,6 +51,7 @@ export interface MessagingInsight {
   ad_id?: string;
   adset_id?: string;
   campaign_name?: string;
+  conversion_destination?: string;
   actions?: MessagingAction[];
 }
 
@@ -74,7 +76,7 @@ export function buildMessagingReport(
     const groups = new Map<string, MessagingAction[]>();
     for (const action of row.actions ?? []) {
       if (action.action_type !== CONVERSATION_ACTION) continue;
-      const destination = destinationLabel(action.action_destination);
+      const destination = destinationLabel(action.conversion_destination ?? row.conversion_destination ?? action.action_destination);
       // Do not assign a historic result to the ad set's current destination.
       if (destination === "Destino no identificado") continue;
       const groupKey = destination;
