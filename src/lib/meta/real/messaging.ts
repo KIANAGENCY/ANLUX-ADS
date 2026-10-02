@@ -1,9 +1,9 @@
 import "server-only";
 import { MetaApiError, metaGraphGet } from "./graph-client";
-import { fetchRealAdSets } from "./adsets";
 import {
   buildMessagingReport,
-  configuredDestinationLabel,
+  CONVERSATION_ACTION,
+  destinationLabel,
   type MessagingInsight,
   type MessagingReport,
 } from "../messaging";
@@ -28,37 +28,36 @@ async function allInsights(accountId: string, params: Record<string, string | nu
 }
 
 export async function fetchMessagingReport(accountId: string, from: string, to: string): Promise<MessagingReport> {
-  const params = {
-    level: "campaign", fields: "campaign_id,campaign_name,actions",
+  const baseParams = {
+    fields: "campaign_id,campaign_name,actions",
     time_range: JSON.stringify({ since: from, until: to }), limit: 500,
     use_unified_attribution_setting: "true",
   };
-  // A breakdown failure must not erase the independent campaign totals.
-  const totals = await allInsights(accountId, params);
+  // Keep a clean campaign total, then request destination attribution separately.
+  const totals = await allInsights(accountId, { ...baseParams, level: "campaign" });
+  const destinationParams = { ...baseParams, action_breakdowns: "action_type,action_destination" };
+  const levels = [
+    { level: "campaign", fields: "campaign_id,campaign_name,actions" },
+    { level: "adset", fields: "campaign_id,campaign_name,adset_id,actions" },
+    { level: "ad", fields: "campaign_id,campaign_name,adset_id,ad_id,actions" },
+  ];
   let breakdown: MessagingInsight[] = [];
-  const warnings: string[] = [];
-  let adSets: Awaited<ReturnType<typeof fetchRealAdSets>> = [];
-  try { adSets = await fetchRealAdSets(accountId); }
-  catch { warnings.push("No se pudo consultar la configuración de los destinos. Se conservan los resultados de Meta."); }
-  const detailParams = { ...params, level: "adset", fields: "campaign_id,campaign_name,adset_id,actions" };
-  try {
-    breakdown = await allInsights(accountId, {
-      ...detailParams, breakdowns: "publisher_platform", action_breakdowns: "action_type,action_destination",
-    });
-  } catch {
-    warnings.push("Meta no permitió el desglose conjunto por origen y destino. Se muestran los totales por campaña.");
+  for (const query of levels) {
     try {
-      breakdown = await allInsights(accountId, { ...detailParams, action_breakdowns: "action_type,action_destination" });
+      const rows = await allInsights(accountId, { ...destinationParams, ...query });
+      const hasExactDestination = rows.some(row => row.actions?.some(action =>
+        action.action_type === CONVERSATION_ACTION && destinationLabel(action.action_destination) !== "Destino no identificado"));
+      if (hasExactDestination) {
+        breakdown = rows;
+        break;
+      }
     } catch {
-      warnings.push("El destino tampoco está disponible para este periodo.");
+      // Some accounts or date ranges reject a breakdown at a given level. Try finer levels.
     }
   }
 
-  const byId = new Map(adSets.map(adSet => [adSet.id, adSet]));
-  const campaigns = buildMessagingReport(totals, breakdown.map(row => {
-    const adSet = row.adset_id ? byId.get(row.adset_id) : undefined;
-    return { ...row, configuredDestination: adSet && adSet.campaignId === row.campaign_id
-      ? configuredDestinationLabel(adSet.destinationType, adSet.whatsappDestination) : undefined };
-  }));
-  return { campaigns, warnings };
+  const warnings = breakdown.length ? [] : [
+    "Meta devolvió el total de conversaciones, pero no identificó WhatsApp, Messenger o Instagram en el desglose. No se asignaron destinos usando la configuración actual de los anuncios.",
+  ];
+  return { campaigns: buildMessagingReport(totals, breakdown), warnings };
 }
