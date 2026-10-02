@@ -45,13 +45,25 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
   for (const query of levels) {
     try {
       const rows = await allInsights(accountId, { ...destinationParams, ...query });
+      // Log only the response shape and destination labels, never tokens, IDs or messages.
+      const conversationActions = rows.flatMap(row => row.actions ?? []).filter(action => action.action_type === CONVERSATION_ACTION);
+      console.info("[messaging-breakdown]", JSON.stringify({
+        level: query.level, rows: rows.length, conversations: conversationActions.length,
+        actionKeys: [...new Set(conversationActions.flatMap(action => Object.keys(action)))],
+        destinations: [...new Set(conversationActions.map(action => action.action_destination ?? "missing"))],
+      }));
       const hasExactDestination = rows.some(row => row.actions?.some(action =>
         action.action_type === CONVERSATION_ACTION && destinationLabel(action.action_destination) !== "Destino no identificado"));
       if (hasExactDestination) {
         breakdown = rows;
         break;
       }
-    } catch {
+    } catch (error) {
+      console.warn("[messaging-breakdown]", JSON.stringify({ level: query.level,
+        kind: error instanceof MetaApiError ? error.kind : "unexpected",
+        status: error instanceof MetaApiError ? error.status : undefined,
+        message: error instanceof MetaApiError ? error.message : "Unexpected breakdown failure",
+      }));
       // Some accounts or date ranges reject a breakdown at a given level. Try finer levels.
     }
   }
