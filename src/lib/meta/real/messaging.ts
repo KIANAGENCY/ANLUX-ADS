@@ -48,7 +48,10 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
   let breakdown: MessagingInsight[] = [];
   for (const query of levels) {
     try {
-      const rows = await allInsights(accountId, { ...destinationParams, ...query } as Record<string, string | number>);
+      const rows = await allInsights(accountId, {
+        ...destinationParams, ...query,
+        fields: query.fields.replace(/actions$/, "actions{action_type,value,action_destination,action_event_channel,action_link_click_destination}"),
+      } as Record<string, string | number>);
       // Log only the response shape and destination labels, never tokens, IDs or messages.
       const conversationActions = rows.flatMap(row => row.actions ?? []).filter(action => action.action_type === CONVERSATION_ACTION);
       console.info("[messaging-breakdown]", JSON.stringify({
@@ -56,6 +59,8 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
         actionKeys: [...new Set(conversationActions.flatMap(action => Object.keys(action)))],
         destinations: [...new Set(conversationActions.map(action => action.conversion_destination ?? action.action_destination ?? "missing"))],
         rowDestinations: [...new Set(rows.map(row => row.conversion_destination ?? "missing"))],
+        channels: [...new Set(conversationActions.map(action => (action as unknown as Record<string, unknown>).action_event_channel ?? "missing"))],
+        clickDestinations: [...new Set(conversationActions.map(action => (action as unknown as Record<string, unknown>).action_link_click_destination ?? "missing"))],
       }));
       const hasExactDestination = rows.some(row => row.actions?.some(action =>
         action.action_type === CONVERSATION_ACTION && destinationLabel(action.conversion_destination ?? row.conversion_destination ?? action.action_destination) !== "Destino no identificado"));
