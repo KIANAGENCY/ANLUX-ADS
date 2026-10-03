@@ -53,6 +53,18 @@ assert.equal(mixed[0].details[0].destination, 'WhatsApp');
 assert.equal(mixed[0].details[0].conversations, 5);
 assert.equal(mixed[0].conversations, 12);
 
+// The response shape seen in production: totals exist without any destination.
+assert.equal(logic.messagingContract({ campaigns: buildMessagingReport([totals[0]], []), warnings: [] }).state, 'incomplete');
+assert.equal(logic.messagingContract({ campaigns: buildMessagingReport([totals[0]], details), warnings: [] }).state, 'verified');
+assert.equal(logic.messagingContract({ campaigns: buildMessagingReport([{ campaign_id: 'zero', actions: [action('0')] }], []), warnings: [] }).state, 'no_observations');
+assert.equal(logic.messagingContract({ campaigns: buildMessagingReport([{ campaign_id: 'missing' }], []), warnings: [] }).state, 'unavailable');
+const partial = buildMessagingReport([totals[0]], [details[0]])[0];
+assert.equal(partial.attributionStatus, 'partial');
+assert.equal(partial.unattributedConversations, 5);
+const incompatible = buildMessagingReport([totals[0]], [{ campaign_id: 'c1', actions: [action('13', 'whatsapp')] }])[0];
+assert.equal(incompatible.attributionStatus, 'inconsistent');
+assert.equal(incompatible.details.length, 0);
+
 class MetaApiError extends Error { constructor(kind, message) { super(message); this.kind = kind; } }
 const createService = get => load('src/lib/meta/real/messaging.ts', {
   '../messaging': logic,
@@ -86,7 +98,7 @@ async function main() {
   const fallbackReport = await fallback.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
   assert.equal(fallbackReport.campaigns[0].conversations, 12);
   assert.equal(JSON.stringify(fallbackReport.campaigns[0].details.map(d => [d.destination, d.conversations])), JSON.stringify([['WhatsApp', 8], ['Messenger', 4]]));
-  assert.equal(fallbackReport.warnings.length, 0);
+  assert.equal(fallbackReport.campaigns[0].attributionStatus, "complete");
   assert.deepEqual(fallbackRequests.filter(r => r.action_breakdowns === 'action_type,action_destination').map(r => r.level), ['campaign', 'adset', 'ad']);
   assert.ok(fallbackRequests.every(r => r.breakdowns !== 'publisher_platform'));
   const conversionRows = createService(async (_, params) => params.breakdowns === 'conversion_destination'
@@ -106,8 +118,26 @@ async function main() {
     : { data: totals });
   const noDetailsReport = await noDetails.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
   assert.equal(noDetailsReport.campaigns[0].conversations, 12);
-  assert.equal(noDetailsReport.warnings.length, 1);
+  assert.ok(noDetailsReport.warnings.length >= 1);
   assert.equal(noDetailsReport.campaigns[0].details.length, 0, 'Unknown destination never borrows current ad configuration');
+  // One campaign's successful breakdown cannot hide another campaign's missing destinations.
+  const twoTotals = [totals[0], { campaign_id: 'c2', actions: [action('3')] }];
+  let attempts = 0;
+  const partialThenComplete = createService(async (_, params) => {
+    if (!params.action_breakdowns) return { data: twoTotals };
+    attempts++;
+    return { data: attempts === 1 ? details : [...details, { campaign_id: 'c2', actions: [action('3', 'messenger')] }] };
+  });
+  const completed = await partialThenComplete.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
+  assert.equal(attempts, 2);
+  assert.equal(completed.campaigns[0].conversations, 12, 'overlapping responses never sum');
+  assert.equal(completed.campaigns[1].attributionStatus, 'complete');
+  assert.equal(completed.warnings.length, 0);
+  const betterPartial = createService(async (_, params) => !params.action_breakdowns ? { data: [totals[0]] }
+    : { data: params.level === 'adset' ? details : [details[0]] });
+  const improved = await betterPartial.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15');
+  assert.equal(improved.campaigns[0].attributionStatus, 'complete');
+  assert.equal(improved.campaigns[0].details[0].conversations, 7);
   const failedTotals = createService(async () => { throw new MetaApiError('invalid_token', 'No access'); });
   await assert.rejects(() => failedTotals.fetchMessagingReport('act_1', '2026-09-01', '2026-09-15'), /No access/);
   const loop = createService(async () => ({ data: [], paging: { next: 'next', cursors: { after: 'same' } } }));

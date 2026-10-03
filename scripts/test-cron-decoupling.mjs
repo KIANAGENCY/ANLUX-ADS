@@ -6,7 +6,7 @@ import ts from "typescript";
 const source = ts.transpileModule(readFileSync("src/app/api/cron/daily-brief/route.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const state = { persisted: 0, updates: [], sent: 0, persistenceFails: false };
+const state = { persisted: 0, updates: [], sent: 0, persistenceFails: false, messagingFails: false };
 const env = { CRON_SECRET: "test-secret" };
 const loadedModule = { exports: {} };
 const imports = {
@@ -19,6 +19,12 @@ const imports = {
     loadServiceBusinessGoals: async () => ({ goals: null }),
     persistServiceIntelligenceMemory: async () => { state.persisted++; return { state: state.persistenceFails ? "unavailable" : "ready" }; },
   },
+  "@/lib/meta/real/messaging": { fetchMessagingReport: async () => {
+    assert.ok(state.updates.some(update => update.snapshot_success_at), "snapshot recorded before contract check");
+    if (state.messagingFails) throw new Error("Meta timeout");
+    return {};
+  } },
+  "@/lib/meta/messaging": { messagingContract: () => ({ state: "incomplete", campaignsWithEvents: 1, campaignsComplete: 0 }) },
   "@/lib/meta/real/accounts": { fetchAdAccounts: async () => [{ id: "act_1", name: "Hotel Expert" }] },
   "@/lib/supabase/service": { getSupabaseServiceClient: () => ({}) },
   "@/lib/memory/config": { isMemoryEnabled: () => true },
@@ -28,7 +34,7 @@ const imports = {
   },
 };
 vm.runInNewContext(source, {
-  module: loadedModule, exports: loadedModule.exports, process: { env },
+  module: loadedModule, exports: loadedModule.exports, process: { env }, AbortSignal,
   require: (name) => { if (name in imports) return imports[name]; throw new Error(`Import inesperado: ${name}`); },
 });
 const request = (authorization) => ({ headers: { get: () => authorization } });
@@ -40,6 +46,13 @@ assert.equal(result.status, 200);
 assert.equal(state.persisted, 1, "la memoria se guarda sin configurar Resend");
 assert.equal(result.body.emailStatus, "skipped");
 assert.equal(state.sent, 0);
+assert.equal(result.body.messagingChecks[0].state, "incomplete");
+assert.ok(state.updates.some(update => update.messaging_contract?.checks[0]?.state === "incomplete"));
+state.messagingFails = true;
+const contractFailure = await loadedModule.exports.GET(request("Bearer test-secret"));
+assert.equal(contractFailure.status, 200, "a contract failure must not invalidate persistence");
+assert.equal(contractFailure.body.messagingChecks[0].state, "failed");
+state.messagingFails = false;
 assert.ok(state.updates.some((update) => update.snapshot_success_at));
 try {
   env.ANLUX_BRIEF_RECIPIENT = "test@example.invalid";

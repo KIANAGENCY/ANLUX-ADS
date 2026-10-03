@@ -104,7 +104,8 @@ function classifyMetaError(status: number, body: MetaGraphErrorBody | null): Met
  */
 export async function metaGraphGet<T>(
   path: string,
-  params: Record<string, string | number | undefined> = {}
+  params: Record<string, string | number | undefined> = {},
+  signal?: AbortSignal,
 ): Promise<T> {
   if (!metaConfig.accessToken) {
     throw new MetaApiError(
@@ -121,7 +122,7 @@ export async function metaGraphGet<T>(
 
   let response: Response;
   try {
-    response = await fetch(url.toString(), { cache: "no-store" });
+    response = await fetch(url.toString(), { cache: "no-store", signal });
   } catch {
     throw new MetaApiError(
       "network_error",

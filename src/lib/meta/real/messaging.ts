@@ -3,7 +3,6 @@ import { MetaApiError, metaGraphGet } from "./graph-client";
 import {
   buildMessagingReport,
   CONVERSATION_ACTION,
-  destinationLabel,
   type MessagingInsight,
   type MessagingReport,
 } from "../messaging";
@@ -11,12 +10,12 @@ import {
 interface Page<T> { data: T[]; paging?: { next?: string; cursors?: { after?: string } } }
 
 /** Follow opaque cursors on the same account path, never a token-bearing next URL. */
-async function allInsights(accountId: string, params: Record<string, string | number>): Promise<MessagingInsight[]> {
+async function allInsights(accountId: string, params: Record<string, string | number>, signal?: AbortSignal): Promise<MessagingInsight[]> {
   const rows: MessagingInsight[] = [];
   const seen = new Set<string>();
   let after: string | undefined;
   for (let page = 0; page < 100; page++) {
-    const result = await metaGraphGet<Page<MessagingInsight>>(`/${accountId}/insights`, { ...params, after });
+    const result = await metaGraphGet<Page<MessagingInsight>>(`/${accountId}/insights`, { ...params, after }, signal);
     if (!Array.isArray(result.data)) throw new MetaApiError("empty_response", "Meta no devolvió un informe válido de conversaciones.");
     rows.push(...result.data);
     if (!result.paging?.next) return rows;
@@ -27,14 +26,14 @@ async function allInsights(accountId: string, params: Record<string, string | nu
   throw new MetaApiError("empty_response", "El informe de conversaciones es demasiado grande. Reduce el rango de fechas.");
 }
 
-export async function fetchMessagingReport(accountId: string, from: string, to: string): Promise<MessagingReport> {
+export async function fetchMessagingReport(accountId: string, from: string, to: string, signal?: AbortSignal): Promise<MessagingReport> {
   const baseParams = {
     fields: "campaign_id,campaign_name,actions",
     time_range: JSON.stringify({ since: from, until: to }), limit: 500,
     use_unified_attribution_setting: "true",
   };
   // Keep a clean campaign total, then request destination attribution separately.
-  const totals = await allInsights(accountId, { ...baseParams, level: "campaign" });
+  const totals = await allInsights(accountId, { ...baseParams, level: "campaign" }, signal);
   const destinationParams = { ...baseParams, action_breakdowns: "action_type,action_destination" };
   const levels = [
     // Meta exposes conversion destination as both a row and action breakdown.
@@ -45,13 +44,13 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
     { level: "adset", fields: "campaign_id,campaign_name,adset_id,actions" },
     { level: "ad", fields: "campaign_id,campaign_name,adset_id,ad_id,actions" },
   ];
-  let breakdown: MessagingInsight[] = [];
+  let campaigns = buildMessagingReport(totals, []);
   for (const query of levels) {
     try {
       const rows = await allInsights(accountId, {
         ...destinationParams, ...query,
         fields: query.fields.replace(/actions$/, "actions{action_type,value,action_destination,action_event_channel,action_link_click_destination}"),
-      } as Record<string, string | number>);
+      } as Record<string, string | number>, signal);
       // Log only the response shape and destination labels, never tokens, IDs or messages.
       const conversationActions = rows.flatMap(row => row.actions ?? []).filter(action => action.action_type === CONVERSATION_ACTION);
       console.info("[messaging-breakdown]", JSON.stringify({
@@ -62,13 +61,20 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
         channels: [...new Set(conversationActions.map(action => (action as unknown as Record<string, unknown>).action_event_channel ?? "missing"))],
         clickDestinations: [...new Set(conversationActions.map(action => (action as unknown as Record<string, unknown>).action_link_click_destination ?? "missing"))],
       }));
-      const hasExactDestination = rows.some(row => row.actions?.some(action =>
-        action.action_type === CONVERSATION_ACTION && destinationLabel(action.conversion_destination ?? row.conversion_destination ?? action.action_destination) !== "Destino no identificado"));
-      if (hasExactDestination) {
-        breakdown = rows;
-        break;
-      }
+      const candidate = buildMessagingReport(totals, rows);
+      // Pick one independent response per campaign. Never sum overlapping queries.
+      campaigns = campaigns.map(current => {
+        const next = candidate.find(campaign => campaign.campaignId === current.campaignId)!;
+        if (current.attributionStatus === "complete") return current;
+        if (next.attributionStatus === "complete") return next;
+        const known = (campaign: typeof current) => campaign.details.reduce((sum, detail) => sum + (detail.conversations ?? 0), 0);
+        if (known(next) > known(current)) return next;
+        if (current.attributionStatus === "unavailable" && next.attributionStatus === "inconsistent") return next;
+        return current;
+      });
+      if (campaigns.every(campaign => campaign.conversations === 0 || campaign.attributionStatus === "complete")) break;
     } catch (error) {
+      if (signal?.aborted) throw error;
       console.warn("[messaging-breakdown]", JSON.stringify({ level: query.level, breakdown: query.breakdowns ?? query.action_breakdowns ?? "action_destination",
         kind: error instanceof MetaApiError ? error.kind : "unexpected",
         status: error instanceof MetaApiError ? error.status : undefined,
@@ -78,8 +84,9 @@ export async function fetchMessagingReport(accountId: string, from: string, to: 
     }
   }
 
-  const warnings = breakdown.length ? [] : [
-    "Meta devolvió el total de conversaciones, pero no identificó WhatsApp, Messenger o Instagram en el desglose. No se asignaron destinos usando la configuración actual de los anuncios.",
-  ];
-  return { campaigns: buildMessagingReport(totals, breakdown), warnings };
+  const warnings = campaigns.filter(campaign => campaign.attributionStatus !== "complete" && campaign.conversations !== 0).map(campaign =>
+    campaign.attributionStatus === "inconsistent"
+      ? `${campaign.campaignName}: el desglose de Meta no coincide con el total. Se conservó el total y se descartó el desglose incompatible.`
+      : `${campaign.campaignName}: Meta no identificó el destino de ${campaign.unattributedConversations ?? "las"} conversaciones. No se asignaron destinos usando la configuración actual de los anuncios.`);
+  return { campaigns, warnings };
 }

@@ -5,6 +5,7 @@ export interface CronRunHealthRecord {
   snapshot_success_at: string | null;
   last_error: string | null;
   email_status: string;
+  messaging_contract?: { checkedAt: string; checks: Array<{ state: string }> } | null;
 }
 
 /** A configured variable is never evidence of a successful scheduled run. */

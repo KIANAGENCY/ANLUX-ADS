@@ -25,6 +25,7 @@ export async function updateCronRun(client: SupabaseClient, period: string, chan
   last_error?: string | null;
   email_status?: CronEmailStatus;
   email_id?: string;
+  messaging_contract?: { checkedAt: string; checks: Array<{ state: string; campaignsWithEvents?: number; campaignsComplete?: number }> };
 }): Promise<void> {
   const { error } = await client.from("anlux_cron_runs").update(changes).eq("period", period);
   if (error) throw error;

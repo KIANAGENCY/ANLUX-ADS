@@ -18,6 +18,8 @@ export interface CampaignMessaging {
   campaignName: string;
   conversations: number | null;
   details: MessagingDetail[];
+  attributionStatus: "complete" | "partial" | "unavailable" | "inconsistent";
+  unattributedConversations: number | null;
 }
 
 export interface MessagingReport {
@@ -67,6 +69,7 @@ export function buildMessagingReport(
     campaigns.set(row.campaign_id, {
       campaignId: row.campaign_id, campaignName: row.campaign_name ?? row.campaign_id,
       conversations: conversationCount(row.actions), details: [],
+      attributionStatus: "unavailable", unattributedConversations: null,
     });
   }
   for (const row of breakdown) {
@@ -89,5 +92,34 @@ export function buildMessagingReport(
       else campaign.details.push({ destination, conversations: count });
     }
   }
+  for (const campaign of campaigns.values()) {
+    const total = campaign.conversations;
+    const known = campaign.details.reduce((sum, detail) => sum + (detail.conversations ?? 0), 0);
+    const invalid = campaign.details.some(detail => detail.conversations === null);
+    if (total === null) continue;
+    if (known > total || invalid) {
+      // An incompatible breakdown must never display duplicated channel totals.
+      campaign.attributionStatus = "inconsistent";
+      campaign.details = [];
+      campaign.unattributedConversations = total;
+    } else {
+      campaign.unattributedConversations = total - known;
+      campaign.attributionStatus = known === total ? "complete" : known > 0 ? "partial" : "unavailable";
+    }
+  }
   return [...campaigns.values()];
+}
+
+/** Sanitized evidence from a live response; absence of events is not verification. */
+export function messagingContract(report: MessagingReport) {
+  const withEvents = report.campaigns.filter(campaign => (campaign.conversations ?? 0) > 0);
+  const complete = withEvents.filter(campaign => campaign.attributionStatus === "complete").length;
+  return {
+    state: withEvents.some(campaign => campaign.attributionStatus === "inconsistent") ? "inconsistent" as const
+      : report.campaigns.some(campaign => campaign.conversations === null) ? "unavailable" as const
+      : withEvents.length === 0 ? "no_observations" as const
+      : complete === withEvents.length ? "verified" as const : "incomplete" as const,
+    campaignsWithEvents: withEvents.length,
+    campaignsComplete: complete,
+  };
 }
