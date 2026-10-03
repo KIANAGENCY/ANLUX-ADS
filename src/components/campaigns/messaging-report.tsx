@@ -49,7 +49,7 @@ export function CampaignMessagingReport({ campaigns, loading }: { campaigns: Cam
         <thead className="border-y border-border-subtle text-muted-foreground"><tr><th scope="col" className="px-5 py-3">Campaña</th><th scope="col" className="px-5 py-3">Destino del mensaje</th><th scope="col" className="px-5 py-3 text-right">Conversaciones iniciadas</th></tr></thead>
         <tbody>{campaigns.map(c => {
           const report = byId.get(c.id);
-          return <CampaignRows key={c.id} name={c.name} total={count(report?.conversations)} details={report?.details ?? []} />;
+          return <CampaignRows key={c.id} name={c.name} total={count(report?.conversations)} details={report?.details ?? []} unattributed={report?.unattributedConversations} />;
         })}</tbody>
       </table>
       {!campaigns.length && <p className="p-5 text-sm text-muted-foreground">No hay campañas para estos filtros.</p>}
@@ -57,9 +57,10 @@ export function CampaignMessagingReport({ campaigns, loading }: { campaigns: Cam
   </Card>;
 }
 
-function CampaignRows({ name, total, details }: { name: string; total: string; details: MessagingReport["campaigns"][number]["details"] }) {
+function CampaignRows({ name, total, details, unattributed }: { name: string; total: string; details: MessagingReport["campaigns"][number]["details"]; unattributed?: number | null }) {
   return <>
     <tr className="border-b border-border-subtle bg-surface-2"><th scope="row" className="px-5 py-3 font-medium">{name}</th><td className="px-5 py-3 text-muted-foreground">Total de la campaña</td><td className="px-5 py-3 text-right font-semibold">{total}</td></tr>
     {details.length ? details.map(d => <tr key={d.destination} className="border-b border-border-subtle"><td className="px-5 py-3 text-muted-foreground">{name}</td><td className="px-5 py-3">{d.destination}</td><td className="px-5 py-3 text-right">{d.conversations === null ? "No disponible" : formatNumber(d.conversations)}</td></tr>) : <tr className="border-b border-border-subtle"><td colSpan={3} className="px-5 py-3 text-xs text-muted-foreground">Sin desglose fiable por destino para esta campaña en el periodo seleccionado.</td></tr>}
+    {(unattributed ?? 0) > 0 && <tr className="border-b border-border-subtle text-amber-400"><td className="px-5 py-3">{name}</td><td className="px-5 py-3">Destino no disponible en Meta</td><td className="px-5 py-3 text-right">{formatNumber(unattributed!)}</td></tr>}
   </>;
 }

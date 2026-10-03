@@ -8,6 +8,10 @@ import { fetchAdAccounts } from "@/lib/meta/real/accounts";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import { isMemoryEnabled } from "@/lib/memory/config";
 import { startCronRun, updateCronRun } from "@/lib/memory/cron-status";
+import { fetchMessagingReport } from "@/lib/meta/real/messaging";
+import { messagingContract } from "@/lib/meta/messaging";
+
+export const maxDuration = 60;
 
 function yesterdaysRange() {
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
@@ -54,10 +58,13 @@ export async function GET(request: NextRequest) {
 
   const sections = [] as Array<{ name: string; headline: string; attention: string[]; healthy: string[] }>;
   const persistenceFailures: string[] = [];
+  const accountIds: string[] = [];
+  const messagingChecks: Array<ReturnType<typeof messagingContract> | { state: "failed" }> = [];
   try {
     const accounts = await fetchAdAccounts();
     if (accounts.length === 0) throw new Error("Meta no devolvió cuentas vinculadas.");
     for (const account of accounts) {
+      accountIds.push(account.id);
       const { goals } = await loadServiceBusinessGoals(account.id);
       const decisions = await generateRealDecisions(account.id, range, { targetCostPerResult: goals?.targetCostPerResult ?? null, service: true });
       const suite = buildIntelligenceSuite(decisions.decisions, goals ?? {}, decisions.portfolioRecommendations);
@@ -74,6 +81,18 @@ export async function GET(request: NextRequest) {
   }
 
   const snapshotOk = persistenceFailures.length === 0;
+  // Record the snapshot before this optional, bounded, read-only check.
+  if (snapshotOk) {
+    const signal = AbortSignal.timeout(20_000);
+    const from = new Date(Date.parse(`${range.to}T00:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10);
+    for (const accountId of accountIds) {
+      try {
+        messagingChecks.push(messagingContract(await fetchMessagingReport(accountId, from, range.to, signal)));
+      } catch {
+        messagingChecks.push({ state: "failed" });
+      }
+    }
+  }
   let emailStatus: "sent" | "skipped" | "failed" = priorEmailStatus === "sent" ? "sent" : "skipped";
   let emailId: string | undefined;
   if (snapshotOk && priorEmailStatus !== "sent" && recipient && resendKey && sections.length > 0) {
@@ -98,6 +117,7 @@ export async function GET(request: NextRequest) {
       finished_at: new Date().toISOString(),
       last_error: snapshotOk ? emailStatus === "failed" ? "email_failed" : null : "snapshot_failed",
       email_status: emailStatus,
+      messaging_contract: { checkedAt: new Date().toISOString(), checks: messagingChecks },
       ...(emailId ? { email_id: emailId } : {}),
     });
   } catch (error) {
@@ -107,5 +127,5 @@ export async function GET(request: NextRequest) {
   if (persistenceFailures.length) {
     return NextResponse.json({ ok: false, error: "No se guardaron todas las observaciones históricas.", emailStatus, accounts: sections.length, persistenceFailures }, { status: 503 });
   }
-  return NextResponse.json({ ok: true, emailStatus, emailId: emailId ?? null, accounts: sections.length, period: range });
+  return NextResponse.json({ ok: true, emailStatus, emailId: emailId ?? null, accounts: sections.length, period: range, messagingChecks });
 }

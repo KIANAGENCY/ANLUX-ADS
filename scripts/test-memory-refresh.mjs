@@ -77,6 +77,8 @@ const cron = load("src/app/api/cron/daily-brief/route.ts", {
   "@/lib/intelligence/engine": { buildIntelligenceSuite: () => ({}) },
   "@/lib/memory/service-repository": { loadServiceBusinessGoals: async () => ({}), persistServiceIntelligenceMemory: async () => ({}) },
   "@/lib/meta/real/accounts": { fetchAdAccounts: async () => [] },
+  "@/lib/meta/real/messaging": { fetchMessagingReport: async () => { throw new Error("Unexpected contract call"); } },
+  "@/lib/meta/messaging": { messagingContract: () => ({ state: "no_observations" }) },
   "@/lib/supabase/service": { getSupabaseServiceClient: () => ({}) },
   "@/lib/memory/config": { isMemoryEnabled: () => true },
   "@/lib/memory/cron-status": { startCronRun: async () => "pending", updateCronRun: async () => {} },
